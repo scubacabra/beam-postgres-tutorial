@@ -54,8 +54,9 @@ instance Table AddressT where
     primaryKey = AddressId . _addressId
 
 data ShoppingCartDb f = ShoppingCartDb
-                      { _shoppingCartUsers :: f (TableEntity UserT) }
-                        deriving Generic
+  { _shoppingCartUsers :: f (TableEntity UserT)
+  , _shoppingCartUserAddresses :: f (TableEntity AddressT)
+  } deriving (Generic)
 
 instance Database ShoppingCartDb
 
