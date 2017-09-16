@@ -1,7 +1,8 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies       #-}
 module Tutorial1 where
 
 import           Data.Text                  (Text)
@@ -18,6 +19,8 @@ data UserT f = User
 
 type User = UserT Identity
 type UserId = PrimaryKey UserT Identity
+
+deriving instance Show User
 
 instance Beamable UserT
 instance Beamable (PrimaryKey UserT)
@@ -51,6 +54,12 @@ insertUsers conn =
                  , User "sam@jely.com" "Sam" "Jely" "332532dcfaa1cbf61e2a266bd723612c" {- sam -}
                  , User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c" {- sam -}
                  ]
+
+selectAllUsers :: Connection -> IO ()
+selectAllUsers conn =
+  withDatabaseDebug putStrLn conn $ do
+    users <- runSelectReturningList $ select allUsers
+    mapM_ (liftIO . putStrLn . show) users
 
 main :: IO ()
 main = do
