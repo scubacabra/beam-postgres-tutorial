@@ -61,6 +61,14 @@ selectAllUsers conn =
     users <- runSelectReturningList $ select allUsers
     mapM_ (liftIO . putStrLn . show) users
 
+sortUsersByFirstName :: Connection -> IO ()
+sortUsersByFirstName conn =
+  withDatabaseDebug putStrLn conn $ do
+    users <- runSelectReturningList $ select sortUsersByFirstName
+    mapM_ (liftIO . putStrLn . show) users
+  where
+    sortUsersByFirstName = orderBy_ (\u -> (asc_ (_userFirstName u), desc_ (_userLastName u))) allUsers
+
 main :: IO ()
 main = do
   conn <- connectPostgreSQL "dbname=shoppingcart1"
