@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE TypeFamilies       #-}
 module Tutorial1 where
 
@@ -76,6 +77,22 @@ boundedUsers conn =
     mapM_ (liftIO . putStrLn . show) users
   where
     boundedQuery = limit_ 1 $ offset_ 1 $ orderBy_ (asc_ . _userFirstName) $ allUsers
+
+userCount :: Connection -> IO ()
+userCount conn =
+  withDatabaseDebug putStrLn conn $ do
+    Just c <- runSelectReturningOne $ select userCount
+    liftIO $ putStrLn ("We have " ++ show c ++ " users in the database")
+  where
+    userCount = aggregate_ (\u -> as_ @Int countAll_) allUsers
+
+numberOfUsersByName :: Connection -> IO ()
+numberOfUsersByName conn =
+  withDatabaseDebug putStrLn conn $ do
+    countedByName <- runSelectReturningList $ select numberOfUsersByName
+    mapM_ (liftIO . putStrLn . show) countedByName
+  where
+    numberOfUsersByName = aggregate_ (\u -> (group_ (_userFirstName u), as_ @Int countAll_)) allUsers
 
 main :: IO ()
 main = do
