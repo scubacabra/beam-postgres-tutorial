@@ -69,6 +69,14 @@ sortUsersByFirstName conn =
   where
     sortUsersByFirstName = orderBy_ (\u -> (asc_ (_userFirstName u), desc_ (_userLastName u))) allUsers
 
+boundedUsers :: Connection -> IO ()
+boundedUsers conn =
+  withDatabaseDebug putStrLn conn $ do
+    users <- runSelectReturningList $ select boundedQuery
+    mapM_ (liftIO . putStrLn . show) users
+  where
+    boundedQuery = limit_ 1 $ offset_ 1 $ orderBy_ (asc_ . _userFirstName) $ allUsers
+
 main :: IO ()
 main = do
   conn <- connectPostgreSQL "dbname=shoppingcart1"
