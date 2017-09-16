@@ -6,6 +6,7 @@ module Tutorial1 where
 
 import           Data.Text                  (Text)
 import           Database.Beam              as B
+import           Database.Beam.Postgres
 import           Database.PostgreSQL.Simple
 
 data UserT f = User
@@ -33,6 +34,9 @@ instance Database ShoppingCartDb
 
 shoppingCartDb :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb = defaultDbSettings
+
+allUsers :: Q PgSelectSyntax ShoppingCartDb s (UserT (QExpr PgExpressionSyntax s))
+allUsers = all_ (_shoppingCartUsers shoppingCartDb)
 
 main :: IO ()
 main = do
