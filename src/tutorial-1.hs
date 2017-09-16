@@ -25,6 +25,15 @@ instance Table UserT where
   data PrimaryKey UserT f = UserId (Columnar f Text) deriving Generic
   primaryKey = UserId . _userEmail
 
+data ShoppingCartDb f = ShoppingCartDb
+                      { _shoppingCartUsers :: f (TableEntity UserT) }
+                        deriving Generic
+
+instance Database ShoppingCartDb
+
+shoppingCartDb :: DatabaseSettings be ShoppingCartDb
+shoppingCartDb = defaultDbSettings
+
 main :: IO ()
 main = do
   conn <- connectPostgreSQL "dbname=shoppingcart1"
