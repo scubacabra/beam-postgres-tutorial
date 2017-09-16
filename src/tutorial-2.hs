@@ -63,6 +63,17 @@ instance Database ShoppingCartDb
 shoppingCartDb :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb = defaultDbSettings
 
+Address (LensFor addressId)    (LensFor addressLine1)
+        (LensFor addressLine2) (LensFor addressCity)
+        (LensFor addressState) (LensFor addressZip)
+        (UserId (LensFor addressForUserId)) = tableLenses
+
+User (LensFor userEmail)    (LensFor userFirstName)
+     (LensFor userLastName) (LensFor userPassword) = tableLenses
+
+ShoppingCartDb (TableLens shoppingCartUsers)
+               (TableLens shoppingCartUserAddresses) = dbLenses
+
 allUsers :: Q PgSelectSyntax ShoppingCartDb s (UserT (QExpr PgExpressionSyntax s))
 allUsers = all_ (_shoppingCartUsers shoppingCartDb)
 
