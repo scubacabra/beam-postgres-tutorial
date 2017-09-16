@@ -30,6 +30,29 @@ instance Table UserT where
   data PrimaryKey UserT f = UserId (Columnar f Text) deriving Generic
   primaryKey = UserId . _userEmail
 
+data AddressT f = Address
+  { _addressId :: C f (Auto Int)
+  , _addressLine1 :: C f Text
+  , _addressLine2 :: C f (Maybe Text)
+  , _addressCity :: C f Text
+  , _addressState :: C f Text
+  , _addressZip :: C f Text
+  , _addressForUser :: PrimaryKey UserT f
+  } deriving (Generic)
+
+type Address = AddressT Identity
+type AddressId = PrimaryKey AddressT Identity
+
+deriving instance Show UserId
+deriving instance Show Address
+
+instance Beamable AddressT
+instance Beamable (PrimaryKey AddressT)
+
+instance Table AddressT where
+    data PrimaryKey AddressT f = AddressId (Columnar f (Auto Int)) deriving Generic
+    primaryKey = AddressId . _addressId
+
 data ShoppingCartDb f = ShoppingCartDb
                       { _shoppingCartUsers :: f (TableEntity UserT) }
                         deriving Generic
