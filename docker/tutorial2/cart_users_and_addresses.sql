@@ -5,7 +5,7 @@ create table cart_users (
   password   varchar not null
 );
 
-create table addresses (
+create table cart_user_addresses (
   id serial       primary key,
   address1        varchar not null,
   address2        varchar,

@@ -32,8 +32,8 @@ instance Table UserT where
 
 data AddressT f = Address
   { _addressId :: C f (Auto Int)
-  , _addressLine1 :: C f Text
-  , _addressLine2 :: C f (Maybe Text)
+  , _addressAddress1 :: C f Text
+  , _addressAddress2 :: C f (Maybe Text)
   , _addressCity :: C f Text
   , _addressState :: C f Text
   , _addressZip :: C f Text
@@ -77,18 +77,28 @@ ShoppingCartDb (TableLens shoppingCartUsers)
 allUsers :: Q PgSelectSyntax ShoppingCartDb s (UserT (QExpr PgExpressionSyntax s))
 allUsers = all_ (_shoppingCartUsers shoppingCartDb)
 
+james :: User
+james = User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c"
+
+betty :: User
+betty = User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f"
+
+sam :: User
+sam = User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c"
+
 insertUsers :: Connection -> IO ()
 insertUsers conn =
   withDatabaseDebug putStrLn conn $ B.runInsert $
     B.insert (_shoppingCartUsers shoppingCartDb) $
-    insertValues [ User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c" {- james -}
-                 , User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
-                 , User "james@pallo.com" "James" "Pallo" "b4cc344d25a2efe540adbf2678e2304c" {- james -}
-                 , User "betty@sims.com" "Betty" "Sims" "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
-                 , User "james@oreily.com" "James" "O'Reily" "b4cc344d25a2efe540adbf2678e2304c" {- james -}
-                 , User "sam@sophitz.com" "Sam" "Sophitz" "332532dcfaa1cbf61e2a266bd723612c" {- sam -}
-                 , User "sam@jely.com" "Sam" "Jely" "332532dcfaa1cbf61e2a266bd723612c" {- sam -}
-                 , User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c" {- sam -}
+    insertValues [james, betty, sam]
+
+insertAddresses :: Connection -> IO ()
+insertAddresses conn =
+  withDatabaseDebug putStrLn conn $ B.runInsert $
+    B.insert (_shoppingCartUserAddresses shoppingCartDb) $
+    insertValues [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
+                 , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
+                 , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty)
                  ]
 
 selectAllUsers :: Connection -> IO ()
