@@ -1,0 +1,12 @@
+version: '3.1'
+
+services:
+
+    db:
+      ports:
+        - 5432:5432
+      image: postgres
+      environment:
+        POSTGRES_DB: shoppingcart2
+        POSTGRES_USER: jacobono
+        POSTGRES_PASSWORD: ''
