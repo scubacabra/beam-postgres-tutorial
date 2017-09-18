@@ -3,6 +3,10 @@ version: '3.1'
 services:
 
     db:
-        image: postgres
-        environment:
-            POSTGRES_DB: shoppingcart1
+      ports:
+        - 5432:5432
+      image: postgres
+      environment:
+        POSTGRES_DB: shoppingcart1
+        POSTGRES_USER: jacobono
+        POSTGRES_PASSWORD: ''

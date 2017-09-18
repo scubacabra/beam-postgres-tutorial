@@ -96,5 +96,5 @@ numberOfUsersByName conn =
 
 main :: IO ()
 main = do
-  conn <- connectPostgreSQL "dbname=shoppingcart1"
+  conn <- connectPostgreSQL "host=localhost dbname=shoppingcart1"
   return ()
