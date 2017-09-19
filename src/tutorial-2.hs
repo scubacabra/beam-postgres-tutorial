@@ -156,6 +156,13 @@ updatingAddressesWithFinerGrainedControl conn = do
 
   mapM_ print addresses
 
+deleteBettysHoustonAddress :: Connection -> IO ()
+deleteBettysHoustonAddress conn =
+  withDatabaseDebug putStrLn conn $
+  runDelete $ delete (shoppingCartDb ^. shoppingCartUserAddresses)
+                     (\address -> address ^. addressCity ==. "Houston" &&.
+                                  _addressForUser address `references_` val_ betty)
+
 sortUsersByFirstName :: Connection -> IO ()
 sortUsersByFirstName conn =
   withDatabaseDebug putStrLn conn $ do
