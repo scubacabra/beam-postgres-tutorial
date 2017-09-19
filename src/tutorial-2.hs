@@ -130,6 +130,32 @@ selectAddressForBetty conn =
       guard_ (address ^. addressForUserId ==. val_ bettyEmail)
       return address
 
+updatingUserWithSave :: Connection -> IO ()
+updatingUserWithSave conn = do
+  [james] <- withDatabaseDebug putStrLn conn $
+             do
+               runUpdate $
+                 save (shoppingCartDb ^. shoppingCartUsers) (james {_userPassword = "52a516ca6df436828d9c0d26e31ef704" })
+
+               runSelectReturningList $
+                 B.lookup (shoppingCartDb ^. shoppingCartUsers) (UserId "james@example.com")
+
+  putStrLn ("James's new password is " ++ show (james ^. userPassword))
+
+updatingAddressesWithFinerGrainedControl :: Connection -> IO ()
+updatingAddressesWithFinerGrainedControl conn = do
+  addresses <- withDatabaseDebug putStrLn conn $
+               do
+                 runUpdate $
+                    update (shoppingCartDb ^. shoppingCartUserAddresses)
+                           (\address -> [ address ^. addressCity <-. val_ "Sugarville"
+                                        , address ^. addressZip <-. "12345"])
+                           (\address -> address ^. addressCity ==. val_ "Sugarland" &&.
+                                        address ^. addressState ==. val_ "TX")
+                 runSelectReturningList $ select $ all_ (shoppingCartDb ^. shoppingCartUserAddresses)
+
+  mapM_ print addresses
+
 sortUsersByFirstName :: Connection -> IO ()
 sortUsersByFirstName conn =
   withDatabaseDebug putStrLn conn $ do
