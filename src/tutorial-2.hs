@@ -10,6 +10,7 @@ import           Data.Text                  (Text)
 import           Database.Beam              as B
 import           Database.Beam.Postgres
 import           Database.PostgreSQL.Simple
+import           Control.Lens
 
 data UserT f = User
   { _userEmail     :: Columnar f Text
@@ -75,7 +76,10 @@ ShoppingCartDb (TableLens shoppingCartUsers)
                (TableLens shoppingCartUserAddresses) = dbLenses
 
 allUsers :: Q PgSelectSyntax ShoppingCartDb s (UserT (QExpr PgExpressionSyntax s))
-allUsers = all_ (_shoppingCartUsers shoppingCartDb)
+allUsers = all_ (shoppingCartDb ^. shoppingCartUsers)
+
+allAddresses :: Q PgSelectSyntax ShoppingCartDb s (AddressT (QExpr PgExpressionSyntax s))
+allAddresses = all_ (shoppingCartDb ^. shoppingCartUserAddresses)
 
 james :: User
 james = User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c"
@@ -106,6 +110,25 @@ selectAllUsers conn =
   withDatabaseDebug putStrLn conn $ do
     users <- runSelectReturningList $ select allUsers
     mapM_ (liftIO . putStrLn . show) users
+
+
+selectAllUsersAndAddresses :: Connection -> IO ([(User, Address)])
+selectAllUsersAndAddresses conn =
+  withDatabaseDebug putStrLn conn $ runSelectReturningList $ select $ do
+    address <- allAddresses
+    user <- related_ (shoppingCartDb ^. shoppingCartUsers) (_addressForUser address)
+    return (user, address)
+
+bettyEmail :: Text
+bettyEmail = "betty@example.com"
+
+selectAddressForBetty :: Connection -> IO [Address]
+selectAddressForBetty conn =
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $ select $ do
+      address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
+      guard_ (address ^. addressForUserId ==. val_ bettyEmail)
+      return address
 
 sortUsersByFirstName :: Connection -> IO ()
 sortUsersByFirstName conn =

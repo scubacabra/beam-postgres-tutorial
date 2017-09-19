@@ -20,5 +20,6 @@ executable beam-tutorial
   build-depends:       base >= 4.7 && < 5,
                        beam-core,
                        beam-postgres,
+                       lens,
                        postgresql-simple,
                        text
