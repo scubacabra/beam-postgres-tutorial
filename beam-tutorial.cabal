@@ -22,4 +22,5 @@ executable beam-tutorial
                        beam-postgres,
                        lens,
                        postgresql-simple,
-                       text
+                       text,
+                       time

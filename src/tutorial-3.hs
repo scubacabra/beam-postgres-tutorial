@@ -8,6 +8,7 @@ module Tutorial3 where
 
 import           Control.Lens
 import           Data.Text                  (Text)
+import           Data.Time
 import           Database.Beam              as B
 import           Database.Beam.Postgres
 import           Database.PostgreSQL.Simple
@@ -72,6 +73,52 @@ instance Table ProductT where
 
 instance Beamable ProductT
 instance Beamable (PrimaryKey ProductT)
+
+deriving instance Show (PrimaryKey AddressT Identity)
+
+data OrderT f = Order
+  { _orderId            :: Columnar f (Auto Int)
+  , _orderDate          :: Columnar f LocalTime
+  , _orderForUser       :: PrimaryKey UserT f
+  , _orderShipToAddress :: PrimaryKey AddressT f
+  , _orderShippingInfo  :: PrimaryKey ShippingInfoT (Nullable f)
+  } deriving (Generic)
+
+type Order = OrderT Identity
+deriving instance Show Order
+
+instance Table OrderT where
+    data PrimaryKey OrderT f = OrderId (Columnar f (Auto Int))
+                               deriving Generic
+    primaryKey = OrderId . _orderId
+
+instance Beamable OrderT
+instance Beamable (PrimaryKey OrderT)
+
+data ShippingCarrier
+  = USPS
+  | FedEx
+  | UPS
+  | DHL
+  deriving (Show, Read, Eq, Ord, Enum)
+
+data ShippingInfoT f = ShippingInfo
+  { _shippingInfoId             :: Columnar f (Auto Int)
+  , _shippingInfoCarrier        :: Columnar f ShippingCarrier
+  , _shippingInfoTrackingNumber :: Columnar f Text
+  } deriving (Generic)
+
+type ShippingInfo = ShippingInfoT Identity
+deriving instance Show ShippingInfo
+
+instance Table ShippingInfoT where
+    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f (Auto Int))
+                                      deriving Generic
+    primaryKey = ShippingInfoId . _shippingInfoId
+
+instance Beamable ShippingInfoT
+instance Beamable (PrimaryKey ShippingInfoT)
+deriving instance Show (PrimaryKey ShippingInfoT (Nullable Identity))
 
 data ShoppingCartDb f = ShoppingCartDb
   { _shoppingCartUsers         :: f (TableEntity UserT)
