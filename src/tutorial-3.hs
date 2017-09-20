@@ -143,6 +143,10 @@ instance Beamable (PrimaryKey LineItemT)
 data ShoppingCartDb f = ShoppingCartDb
   { _shoppingCartUsers         :: f (TableEntity UserT)
   , _shoppingCartUserAddresses :: f (TableEntity AddressT)
+  , _shoppingCartProducts      :: f (TableEntity ProductT)
+  , _shoppingCartOrders        :: f (TableEntity OrderT)
+  , _shoppingCartShippingInfos :: f (TableEntity ShippingInfoT)
+  , _shoppingCartLineItems     :: f (TableEntity LineItemT)
   } deriving (Generic)
 
 instance Database ShoppingCartDb
