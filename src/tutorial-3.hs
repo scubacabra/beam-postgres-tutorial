@@ -54,6 +54,25 @@ instance Table AddressT where
     data PrimaryKey AddressT f = AddressId (Columnar f (Auto Int)) deriving Generic
     primaryKey = AddressId . _addressId
 
+data ProductT f = Product
+  { _productId          :: C f (Auto Int)
+  , _productTitle       :: C f Text
+  , _productDescription :: C f Text
+  , _productPrice       :: C f Int {- Price in cents -}
+  } deriving (Generic)
+
+type Product = ProductT Identity
+type ProductId = PrimaryKey ProductT Identity
+
+deriving instance Show Product
+
+instance Table ProductT where
+  data PrimaryKey ProductT f = ProductId (Columnar f (Auto Int)) deriving Generic
+  primaryKey = ProductId . _productId
+
+instance Beamable ProductT
+instance Beamable (PrimaryKey ProductT)
+
 data ShoppingCartDb f = ShoppingCartDb
   { _shoppingCartUsers         :: f (TableEntity UserT)
   , _shoppingCartUserAddresses :: f (TableEntity AddressT)
