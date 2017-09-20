@@ -120,6 +120,26 @@ instance Beamable ShippingInfoT
 instance Beamable (PrimaryKey ShippingInfoT)
 deriving instance Show (PrimaryKey ShippingInfoT (Nullable Identity))
 
+deriving instance Show (PrimaryKey OrderT Identity)
+deriving instance Show (PrimaryKey ProductT Identity)
+
+data LineItemT f = LineItem
+  { _lineItemInOrder    :: PrimaryKey OrderT f
+  , _lineItemForProduct :: PrimaryKey ProductT f
+  , _lineItemQuantity   :: Columnar f Int
+  } deriving (Generic)
+
+type LineItem = LineItemT Identity
+deriving instance Show LineItem
+
+instance Table LineItemT where
+    data PrimaryKey LineItemT f = LineItemId (PrimaryKey OrderT f) (PrimaryKey ProductT f)
+                                  deriving Generic
+    primaryKey = LineItemId <$> _lineItemInOrder <*> _lineItemForProduct
+
+instance Beamable LineItemT
+instance Beamable (PrimaryKey LineItemT)
+
 data ShoppingCartDb f = ShoppingCartDb
   { _shoppingCartUsers         :: f (TableEntity UserT)
   , _shoppingCartUserAddresses :: f (TableEntity AddressT)
