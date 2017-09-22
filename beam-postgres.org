@@ -302,7 +302,7 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
     #+END_SRC
 
     expressions.
-* TODO Beam with postgres - tutorial 2 
+* Beam with postgres - tutorial 2 
 ** Adding a related address table
 
    This is basically the same as ~UserT~, but it contains a reference to a
@@ -488,7 +488,7 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
         WHERE ("t1"."for_user__email") = ("t0"."email")
       #+END_SRC
 
-***** getting the inner join through references, beam automatically generate clause matching primary keys  :ask:error thrown:
+***** getting the inner join through references, beam automatically generate clause matching primary keys
 
       #+BEGIN_SRC haskell
         selectUsersAndAddessesWithReferences :: Connection -> IO [(User, Address)]
@@ -520,7 +520,7 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
         WHERE ("t1"."for_user__email") = ("t0"."email")
       #+END_SRC
 
-**** TODO using on clause with related_ to get postgres to work          :ask:lens accessor mixing:
+**** using on clause with related_ :try with template haskell:
 
      #+BEGIN_SRC haskell
        selectAllUsersAndAddresses :: Connection -> IO ([(User, Address)])
@@ -531,9 +531,18 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
            return (user, address)
      #+END_SRC
 
-     This def gets postgres to work, though there is the clunky lens and normal
-     record accessor syntax mixed in.  Would be nice to get it all as accessors
-     with lens.
+     The mixing of lens and record syntax might be confusing, but is there for a reason.
+
+     The relationship combinators want the entire ~PrimaryKey~ so we must use
+     the record accessor ~_addressForUser~ to get us that. ~addressForUserId~ is
+     a lens from a ~User~ to the id of the address in the ~_addressForUser~
+     field.  The lens unwraps the data constructor, leaving us with ~UserId~
+     instead of a ~PrimaryKey~
+
+     There is currently no way to use the generics mechanisms to automatically
+     get these lenses.  If you really would like a uniform syntax with lenses,
+     just use template haskell and ~makeLenses~ from ~Control.Lens~ -- this
+     seems to work out just fine.
 
      The sql for postgres is:
 
@@ -554,14 +563,29 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
        ON ("t0"."for_user__email") = ("t1"."email")
      #+END_SRC
 
-*** selecting a specific user with id
+*** selecting a specific user with id -- two ways
 
     We can select all addresses that belong to Betty with a guard_ clause,
     producing a where clause in the sql.
 
-**** TODO from a Text value :what does val_ do?:
-    We can use ~val_~ to ???
+**** a little on ~val_~
 
+    ~val_~ takes a haskell literal (be it a scalar value, an entire table with scalar
+    values, or a tuple of any of the above) and converts it into a sql expression
+    with the given haskell type. That is to say you can think of it like
+
+    #+BEGIN_SRC haskell
+      val_ :: a -> QExpr syntax s a
+    #+END_SRC
+
+    Except, if you give it a table of values (say -UserT Identity-):
+
+    #+BEGIN_SRC haskell
+      val_ :: UserT Identity -> UserT (QExpr syntax s a)
+    #+END_SRC
+
+**** from a Text value
+    
     #+BEGIN_SRC haskell
       bettyEmail :: Text
       bettyEmail = "betty@example.com"
@@ -575,7 +599,24 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
             return address
     #+END_SRC
 
-**** TODO from a UserId value :what is the difference between this and above:
+    here, ~val_~ has the type
+
+    #+BEGIN_SRC haskell
+      HaskellLiteralForQExpr
+        (QGenExpr QValueContext PgExpressionSyntax Database.Beam.Query.QueryInaccessible Text)
+      -> QGenExpr QValueContext PgExpressionSyntax Database.Beam.Query.QueryInaccessible Text
+    #+END_SRC
+
+    So we have to use the lens that unwraps the ~UserId~, ~addressForUserId~
+    that yields a value of type
+
+    #+BEGIN_SRC haskell
+      QGenExpr QValueContext PgExpressionSyntax Database.Beam.Query.QueryInaccessible Text
+    #+END_SRC
+
+    And this allows us to compare the two with ~==.~ 
+
+**** from a UserId value
 
      #+BEGIN_SRC haskell
        bettyId :: UserId
@@ -589,6 +630,21 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
              guard_ (_addressForUser address ==. val_ bettyId)
              return address
      #+END_SRC
+
+     Here, ~val_~ has the type
+
+     #+BEGIN_SRC haskell
+       HaskellLiteralForQExpr
+         (PrimaryKey UserT (QExpr PgExpressionSyntax Database.Beam.Query.QueryInaccessible))
+       -> PrimaryKey UserT (QExpr PgExpressionSyntax Database.Beam.Query.QueryInaccessible)
+     #+END_SRC
+
+     Here, we can't use the lens that unwraps ~UserId~ because we aren't
+     comparing a ~Text~ value, we are comparing the whole ~PrimaryKey UserT f~
+     value.
+
+     We must use the record accessor ~_addressForUser~ on the ~AddressT f~
+     record for the boolean comparison.
 
 ** updating rows in the database
 
@@ -633,7 +689,7 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
 
     #+END_SRC
 
-** TODO deletions with delete                                            :ask:compiler error val_:
+** deletions with delete :fix docs typo:
 
    The tutorial has this,
 
@@ -881,7 +937,8 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
           B.insert (_shoppingCartUsers shoppingCartDb) $
           insertValues users
     #+END_SRC
-*** TODO addresses                                      :ask:insertReturning:
+
+*** addresses
 
     #+BEGIN_SRC haskell
       addresses :: [Address]
@@ -891,53 +948,33 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
                   ]
     #+END_SRC
 
-**** TODO insertReturning only in postgres and failing
+**** insertReturning in postgres
+
+     For sqlite the ~insertReturningList~ syntax is:
 
      #+BEGIN_SRC haskell
        insertAddresses :: Connection -> IO [Address]
-       insertAddresses conn = do
-         az@[jamesAddress1, bettyAddress1, bettyAddress2] <-
-             runInsertReturning $
-             insertReturning (shoppingCartDb ^. shoppingCartUserAddresses) $ insertValues addresses
-         return az
-     #+END_SRC
-
-     The tutorial says sqlite has ~insertReturningList~ but postgres backend
-     only has ~insertReturning~ and then the error is that
-
-     #+BEGIN_SRC text
-       error:
-            • Couldn't match type ‘Pg’ with ‘(->) (PgInsertReturning a1)’
-                arising from a functional dependency between:
-                  constraint ‘MonadBeam
-                                syntax0 be0 Connection ((->) (PgInsertReturning a1))’
-                    arising from a use of ‘withDatabaseDebug’
-                  instance ‘MonadBeam PgCommandSyntax Postgres Connection Pg’
-                    at <no location info>
-            • In the expression: withDatabaseDebug putStrLn conn
-              In the expression:
-                withDatabaseDebug putStrLn conn
-                $ runInsertReturning
-                  $ insertReturning (shoppingCartDb ^. shoppingCartUserAddresses)
-                    $ insertValues addresses
-              In an equation for ‘insertAddresses’:
-                  insertAddresses conn
-                    = withDatabaseDebug putStrLn conn
-                      $ runInsertReturning
-                        $ insertReturning (shoppingCartDb ^. shoppingCartUserAddresses)
-                          $ insertValues addresses (intero)
-
-     #+END_SRC
-**** regular old insert without returning works
-
-     #+BEGIN_SRC haskell
-       insertAddresses :: Connection -> IO ()
        insertAddresses conn =
-         withDatabaseDebug putStrLn conn $ B.runInsert $
-           B.insert (shoppingCartDb ^. shoppingCartUserAddresses) $
+         withDatabaseDebug putStrLn conn $
+           runInsertReturningList $ insertReturning (shoppingCartDb ^. shoppingCartUserAddresses) $
            insertValues addresses
      #+END_SRC
-*** TODO products                                       :ask:insertReturning:
+
+     But for postgres, the syntax is a little different:
+
+     #+BEGIN_SRC haskell
+       insertAddresses :: Connection -> IO [Address]
+       insertAddresses conn =
+         withDatabaseDebug putStrLn conn $
+           runInsertReturningList (shoppingCartDb ^. shoppingCartUserAddresses) $
+           insertValues addresses
+     #+END_SRC
+
+     The confusion comes because beam-postgres has its own INSERT ... RETURNING
+     ... syntax exposed by the insertReturning function. This is specific to
+     postgres.
+
+*** products
 
     #+BEGIN_SRC haskell
       products :: [Product]
@@ -950,44 +987,10 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
       insertProducts :: Connection -> IO [Product]
       insertProducts conn =
         withDatabaseDebug putStrLn conn $
-          runInsertReturning $
-          insertReturning (shoppingCartDb ^. shoppingCartProducts) $ insertValues products
+          runInsertReturningList (shoppingCartDb ^. shoppingCartProducts) $
+          insertValues products
     #+END_SRC
 
-**** TODO insertReturning only in postgres and failing
-     Same as with addresses, ~insertReturningList~ just blows up.
-
-     #+BEGIN_SRC text
-      error:
-          • Couldn't match type ‘Pg’ with ‘(->) (PgInsertReturning a2)’
-              arising from a functional dependency between:
-                constraint ‘MonadBeam
-                              syntax0 be0 Connection ((->) (PgInsertReturning a2))’
-                  arising from a use of ‘withDatabaseDebug’
-                instance ‘MonadBeam PgCommandSyntax Postgres Connection Pg’
-                  at <no location info>
-          • In the expression: withDatabaseDebug putStrLn conn
-            In the expression:
-              withDatabaseDebug putStrLn conn
-              $ runInsertReturning
-                $ insertReturning (shoppingCartDb ^. shoppingCartUserAddresses)
-                  $ insertValues products
-            In an equation for ‘insertProducts’:
-                insertProducts conn
-                  = withDatabaseDebug putStrLn conn
-                    $ runInsertReturning
-                      $ insertReturning (shoppingCartDb ^. shoppingCartUserAddresses)
-                        $ insertValues products (intero)
-    #+END_SRC
-**** regular old insert without returning works
-
-     #+BEGIN_SRC haskell
-       insertProducts :: Connection -> IO ()
-       insertProducts conn =
-         withDatabaseDebug putStrLn conn $ B.runInsert $
-           B.insert (shoppingCartDb ^. shoppingCartProducts) $
-           insertValues products
-     #+END_SRC
 *** TODO shipping information                               :ask:marshalling:
 
     Inserting shipping information makes us marshall the ~ShippingCarrier~ enumeration.

@@ -1,15 +1,16 @@
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeApplications   #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE StandaloneDeriving    #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
 module Tutorial3 where
 
 import           Control.Lens
-import           Data.Text                  (Text)
+import           Data.Text                                (Text)
 import           Data.Time
-import           Database.Beam              as B
+import           Database.Beam                            as B
+import           Database.Beam.Backend.SQL.BeamExtensions
 import           Database.Beam.Postgres
 import           Database.PostgreSQL.Simple
 
@@ -200,29 +201,42 @@ allUsers = all_ (shoppingCartDb ^. shoppingCartUsers)
 allAddresses :: Q PgSelectSyntax ShoppingCartDb s (AddressT (QExpr PgExpressionSyntax s))
 allAddresses = all_ (shoppingCartDb ^. shoppingCartUserAddresses)
 
-james :: User
-james = User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c"
+users :: [User]
+users@[james, betty, sam] = [ User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c"
+                            , User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f"
+                            , User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c"]
 
-betty :: User
-betty = User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f"
+addresses :: [Address]
+addresses = [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
+            , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
+            , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty)
+            ]
 
-sam :: User
-sam = User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c"
+products :: [Product]
+products = [ Product (Auto Nothing) "Red Ball" "A bright red, very spherical ball" 1000
+           , Product (Auto Nothing) "Math Textbook" "Contains a lot of important math theorems and formulae" 2500
+           , Product (Auto Nothing) "Intro to Haskell" "Learn the best programming language in the world" 3000
+           , Product (Auto Nothing) "Suitcase" "A hard durable suitcase" 15000
+           ]
+
 
 insertUsers :: Connection -> IO ()
 insertUsers conn =
   withDatabaseDebug putStrLn conn $ B.runInsert $
     B.insert (_shoppingCartUsers shoppingCartDb) $
-    insertValues [james, betty, sam]
+    insertValues users
 
-insertAddresses :: Connection -> IO ()
+insertAddresses :: Connection -> IO [Address]
 insertAddresses conn =
-  withDatabaseDebug putStrLn conn $ B.runInsert $
-    B.insert (_shoppingCartUserAddresses shoppingCartDb) $
-    insertValues [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
-                 , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
-                 , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty)
-                 ]
+  withDatabaseDebug putStrLn conn $
+    runInsertReturningList (shoppingCartDb ^. shoppingCartUserAddresses) $
+    insertValues addresses
+
+insertProducts :: Connection -> IO [Product]
+insertProducts conn =
+  withDatabaseDebug putStrLn conn $
+    runInsertReturningList (shoppingCartDb ^. shoppingCartProducts) $
+    insertValues products
 
 selectAllUsers :: Connection -> IO ()
 selectAllUsers conn =
@@ -247,6 +261,17 @@ selectAddressForBetty conn =
     runSelectReturningList $ select $ do
       address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
       guard_ (address ^. addressForUserId ==. val_ bettyEmail)
+      return address
+
+bettyId :: UserId
+bettyId = UserId "betty@example.com"
+
+selectAddressForBettyId :: Connection -> IO [Address]
+selectAddressForBettyId conn =
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $ select $ do
+      address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
+      guard_ (_addressForUser address ==. val_ bettyId)
       return address
 
 updatingUserWithSave :: Connection -> IO ()
@@ -309,5 +334,5 @@ numberOfUsersByName conn =
 
 main :: IO ()
 main = do
-  conn <- connectPostgreSQL "host=localhost dbname=shoppingcart2"
+  conn <- connectPostgreSQL "host=localhost dbname=shoppingcart3"
   return ()

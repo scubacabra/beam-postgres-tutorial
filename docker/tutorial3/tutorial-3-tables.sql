@@ -1,4 +1,4 @@
-create table cart_user (
+create table cart_users (
   email      varchar not null primary key,
   first_name varchar not null,
   last_name  varchar not null,
@@ -12,7 +12,7 @@ create table addresses (
   city            varchar not null,
   state           varchar not null,
   zip             varchar not null,
-  for_user__email varchar not null references cart_user (email)
+  for_user__email varchar not null references cart_users (email)
 );
 
 create table products (
@@ -25,8 +25,8 @@ create table products (
 create table orders (
   id                  serial primary key,
   date                timestamp without time zone not null,
-  for_user__email     varchar not null references cart_user (email),
-  ship_to_address__id integer not null references address (id),
+  for_user__email     varchar not null references cart_users (email),
+  ship_to_address__id integer not null references addresses (id),
   shipping_info__id   integer /* this is a nullable foreign key as per the tutorial */
 );
 
@@ -37,7 +37,7 @@ create table shipping_info (
 );
 
 create table line_items (
-  item_in_order__id    integer not null references cart_order (id),
-  item_for_product__id integer not null references product (id),
+  item_in_order__id    integer not null references orders (id),
+  item_for_product__id integer not null references products (id),
   item_quantity        integer not nulL
 );
