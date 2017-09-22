@@ -1,9 +1,10 @@
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE StandaloneDeriving    #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications   #-}
+{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Tutorial3 where
 
 import           Control.Lens
@@ -13,6 +14,7 @@ import           Database.Beam                            as B
 import           Database.Beam.Backend.SQL.BeamExtensions
 import           Database.Beam.Postgres
 import           Database.PostgreSQL.Simple
+import           Database.Beam.Backend.SQL
 
 data UserT f = User
   { _userEmail     :: Columnar f Text
@@ -151,6 +153,9 @@ data ShoppingCartDb f = ShoppingCartDb
   } deriving (Generic)
 
 instance Database ShoppingCartDb
+
+instance HasSqlValueSyntax be String => HasSqlValueSyntax be ShippingCarrier where
+  sqlValueSyntax = autoSqlValueSyntax
 
 shoppingCartDb :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb =
