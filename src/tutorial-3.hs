@@ -33,13 +33,13 @@ instance Table UserT where
   primaryKey = UserId . _userEmail
 
 data AddressT f = Address
-  { _addressId       :: C f (Auto Int)
-  , _addressAddress1 :: C f Text
-  , _addressAddress2 :: C f (Maybe Text)
-  , _addressCity     :: C f Text
-  , _addressState    :: C f Text
-  , _addressZip      :: C f Text
-  , _addressForUser  :: PrimaryKey UserT f
+  { _addressId      :: C f (Auto Int)
+  , _addressLine1   :: C f Text
+  , _addressLine2   :: C f (Maybe Text)
+  , _addressCity    :: C f Text
+  , _addressState   :: C f Text
+  , _addressZip     :: C f Text
+  , _addressForUser :: PrimaryKey UserT f
   } deriving (Generic)
 
 type Address = AddressT Identity
@@ -152,7 +152,29 @@ data ShoppingCartDb f = ShoppingCartDb
 instance Database ShoppingCartDb
 
 shoppingCartDb :: DatabaseSettings be ShoppingCartDb
-shoppingCartDb = defaultDbSettings
+shoppingCartDb =
+  defaultDbSettings `withDbModification`
+  dbModification
+  { _shoppingCartUserAddresses =
+      modifyTable (\_ -> "addresses") $
+      tableModification
+      { _addressLine1 = fieldNamed "address1"
+      , _addressLine2 = fieldNamed "address2"
+      }
+  , _shoppingCartProducts = modifyTable (\_ -> "products") tableModification
+  , _shoppingCartOrders =
+      modifyTable (\_ -> "orders") $
+      tableModification
+      {_orderShippingInfo = ShippingInfoId "shipping_info__id"}
+  , _shoppingCartShippingInfos =
+      modifyTable (\_ -> "shipping_info") $
+      tableModification
+      { _shippingInfoId = "id"
+      , _shippingInfoCarrier = "carrier"
+      , _shippingInfoTrackingNumber = "tracking_number"
+      }
+  , _shoppingCartLineItems = modifyTable (\_ -> "line_items") tableModification
+  }
 
 LineItem _ _ (LensFor lineItemQuantity) = tableLenses
 
