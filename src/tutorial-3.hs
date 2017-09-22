@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE TypeFamilies       #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Tutorial3 where
 
 import           Control.Lens
@@ -14,7 +15,9 @@ import           Database.Beam                            as B
 import           Database.Beam.Backend.SQL.BeamExtensions
 import           Database.Beam.Postgres
 import           Database.PostgreSQL.Simple
+import           Database.PostgreSQL.Simple.FromField
 import           Database.Beam.Backend.SQL
+import           Text.Read
 
 data UserT f = User
   { _userEmail     :: Columnar f Text
@@ -156,6 +159,14 @@ instance Database ShoppingCartDb
 
 instance HasSqlValueSyntax be String => HasSqlValueSyntax be ShippingCarrier where
   sqlValueSyntax = autoSqlValueSyntax
+
+instance FromField ShippingCarrier where
+  fromField f = do x <- readMaybe <$> fromField f
+                   case x of
+                     Nothing -> returnError ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
+                     Just x -> pure x
+
+instance FromBackendRow Postgres ShippingCarrier
 
 shoppingCartDb :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb =
