@@ -219,6 +219,8 @@ products = [ Product (Auto Nothing) "Red Ball" "A bright red, very spherical bal
            , Product (Auto Nothing) "Suitcase" "A hard durable suitcase" 15000
            ]
 
+shippingInfos :: [ShippingInfo]
+shippingInfos = [ ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI" ]
 
 insertUsers :: Connection -> IO ()
 insertUsers conn =
