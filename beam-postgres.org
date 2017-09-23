@@ -1,0 +1,1251 @@
+* TODO Beam with postgres - tutorial 1
+
+trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam's tutorial 1]], but for ~postgres~ instead of ~sqlite3~.
+
+** TODO stack setup
+
+   Add this snippet to the ~packages~ section of ~stack.yaml~
+
+   #+BEGIN_SRC yaml
+     - location:
+         git: https://github.com/tathougies/beam.git
+         commit: 3b9015c06cb5b4179f42ec3c203d45d8f328d8c5
+       extra-dep: true
+       subdirs:
+         - beam-core
+         - beam-migrate
+         - beam-postgres
+   #+END_SRC
+
+*** TODO What does this do?
+** cabal setup
+
+   Add these dependencies to the cabal file
+   
+   #+BEGIN_SRC text
+     beam-core,
+     beam-postgres,
+     postgresql-simple,
+     text
+   #+END_SRC
+** language pragmas
+   
+   #+BEGIN_SRC haskell
+     {-# LANGUAGE DeriveGeneric         #-}
+     {-# LANGUAGE FlexibleInstances     #-}
+     {-# LANGUAGE OverloadedStrings     #-}
+     {-# LANGUAGE PartialTypeSignatures #-}
+     {-# LANGUAGE StandaloneDeriving    #-}
+     {-# LANGUAGE TypeApplications      #-}
+     {-# LANGUAGE TypeFamilies          #-}
+   #+END_SRC
+
+** imports
+
+   #+BEGIN_SRC haskell
+     import           Data.Text                  (Text)
+     import           Database.Beam              as B
+     import           Database.Beam.Postgres
+     import           Database.PostgreSQL.Simple
+   #+END_SRC
+
+   We need the beam-postgres backend, along with what comes with beam-core.  One
+   thing to note is that the postgres backend supplies it's own insert and
+   runInsert, so we qualify beam-core to use those two functions without
+   ambiguity.
+   
+** getting the connection to the database
+
+   Get the connection to your database via ~PostgreSQL.Simple.connectPostgreSQL~
+
+   #+BEGIN_SRC haskell
+     let conn = connectPostgreSQL "dbName=shoppingcart1"
+   #+END_SRC
+
+   We will use this connection to pass to our functions doing database stuff we
+   will define later.
+
+   We need the pragma
+
+   #+BEGIN_SRC haskell
+     {-# LANGUAGE OverloadedStrings #-}
+   #+END_SRC
+
+   for this to work
+** TODO defining a table                                  :link:to:other:doc:
+
+   #+BEGIN_SRC haskell
+     data UserT f = User
+       { _userEmail     :: Columnar f Text
+       , _userFirstName :: Columnar f Text
+       , _userLastName  :: Columnar f Text
+       , _userPassword  :: Columnar f Text
+       } deriving (Generic)
+   #+END_SRC
+
+   Using some defaults of beam, this will make calls to columns with names
+
+   #+BEGIN_SRC text
+     email
+     first_name
+     last_name
+     password
+   #+END_SRC
+
+   You can change these, if you like, see the [[http:][BROKEN LINK FIXME]] 
+
+   The pragma ~{-# LANGUAGE DeriveGeneric #-}~ is necessary for compilation.
+
+   Just like in the sqlite tutorial, ~Columnar Identity a~ is equivalent to ~a~.
+   Given that,  
+
+   #+BEGIN_SRC haskell
+     type User = UserT Identity
+   #+END_SRC
+
+   means that the ~User~ type looks just like a record type.
+
+   #+BEGIN_SRC haskell
+     data User = User
+       { _userEmail     :: Text
+       , _userFirstName :: Text
+       , _userLastName  :: Text
+       , _userPassword  :: Text
+       } deriving (Generic)
+   #+END_SRC
+
+   That is why ~UserT~ has the data constructor ~User~.
+
+*** PrimaryKey type
+    
+    #+BEGIN_SRC haskell
+      type UserId = PrimaryKey UserT Identity
+    #+END_SRC
+
+    user id, that in the actual database is ~email~.
+
+** Letting beam know about our table
+
+   #+BEGIN_SRC haskell
+     {-# LANGUAGE FlexibleInstances #-}
+     {-# LANGUAGE TypeFamilies      #-}
+
+     instance Beamable UserT
+     instance Beamable (PrimaryKey UserT)
+
+     instance Table UserT where
+       data PrimaryKey UserT f = UserId (Columnar f Text) deriving Generic
+       primaryKey = UserId . _userEmail
+   #+END_SRC
+
+   The last two instance definitions need each other and won't compile on their own.
+
+** letting beam know about our database
+
+   #+BEGIN_SRC haskell
+     data ShoppingCartDb f = ShoppingCartDb
+       { _shoppingCartUsers :: f (TableEntity UserT)
+       } deriving (Generic)
+
+     instance Database ShoppingCartDb
+
+     shoppingCartDb :: DatabaseSettings be ShoppingCartDb
+     shoppingCartDb = defaultDbSettings
+   #+END_SRC
+
+   Again, per conventions, this will look at the database with a table called
+   ~cart_users~.  Again, this can be changed as well.  The database isn't named
+   to any convention, connect to it as above -- this just defines the tables in
+   the database we connect to.  ~UserT~ defines the columns in the table.
+
+   ~shoppingCartDb~ is a handle we will use to get at our tables.  You can do
+   that with lenses if you set that up, or through regular record syntax. 
+
+** TODO database operations                                             :ask:
+*** all users at the top level                                          :ask:
+
+    It would be nice to do this at the top level, since a bunch of these
+    functions are using all users.  Additionally everytime we query on users, we
+    query on them all first.
+
+    #+BEGIN_SRC haskell
+      allUsers = all_ (_shoppingCartUsers shoppingCartDb)
+    #+END_SRC
+   
+    But I am getting this error and idk why
+
+    #+BEGIN_SRC text
+      Couldn't match type ‘Database.Beam.Backend.SQL.SQL92.Sql92FromExpressionSyntax
+                                    (Database.Beam.Backend.SQL.SQL92.Sql92SelectTableFromSyntax
+                                       (Database.Beam.Backend.SQL.SQL92.Sql92SelectSelectTableSyntax
+                                          select0))’
+                            with ‘Database.Beam.Backend.SQL.SQL92.Sql92SelectTableExpressionSyntax
+                                    (Database.Beam.Backend.SQL.SQL92.Sql92SelectSelectTableSyntax
+                                       select0)’
+               arising from a use of ‘all_’
+             The type variable ‘select0’ is ambiguous
+           • In the expression: all_ (_shoppingCartUsers shoppingCartDb)
+             In an equation for ‘allUsers’:
+                 allUsers = all_ (_shoppingCartUsers shoppingCartDb)
+           • Relevant bindings include
+               allUsers :: Q select0
+                             ShoppingCartDb
+                             s
+                             (UserT
+                                (QExpr
+                                   (Database.Beam.Backend.SQL.SQL92.Sql92SelectTableExpressionSyntax
+                                      (Database.Beam.Backend.SQL.SQL92.Sql92SelectSelectTableSyntax
+                                         select0))
+                                   s))
+    #+END_SRC
+   
+    If I use some type holes and fill in the blank, I can concretize a type and
+    it typechecks!
+
+    #+BEGIN_SRC haskell
+      allUsers :: Q PgSelectSyntax ShoppingCartDb s (UserT (QExpr PgExpressionSyntax s))
+      allUsers = all_ (_shoppingCartUsers shoppingCartDb)
+    #+END_SRC
+
+    You need to import ~Database.Beam.Postgres~ for the type signature to work.
+
+*** TODO inserting into the database                 :function:ambiguity:ask:
+
+    #+BEGIN_SRC haskell
+      insertvals :: Connection -> IO ()
+      insertvals conn =
+        withDatabaseDebug putStrLn conn $ B.runInsert $
+          B.insert (_shoppingCartUsers shoppingCartDb) $
+          insertValues [ User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c" {- james -}
+                       , User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
+                       , User "james@pallo.com" "James" "Pallo" "b4cc344d25a2efe540adbf2678e2304c" {- james -}
+                       , User "betty@sims.com" "Betty" "Sims" "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
+                       , User "james@oreily.com" "James" "O'Reily" "b4cc344d25a2efe540adbf2678e2304c" {- james -}
+                       , User "sam@sophitz.com" "Sam" "Sophitz" "332532dcfaa1cbf61e2a266bd723612c" {- sam -}
+                       , User "sam@jely.com" "Sam" "Jely" "332532dcfaa1cbf61e2a266bd723612c" {- sam -}
+                       , User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c" {- sam -}
+                       ]
+    #+END_SRC
+
+    Need to use ~B.insert~ and ~B.runInsert~ because the postgres backend has
+    it's own version of this function and this avoids the ambiguity the compiler
+    complains about.
+
+    The sqlite backend doesn't have these functions defined, so the tutorial for
+    that doesn't need to worry about it.
+
+*** selecting users 
+   
+    #+BEGIN_SRC haskell
+      selectusers :: Connection -> IO ()
+      selectusers conn =
+        withDatabaseDebug putStrLn conn $ do
+          users <- runSelectReturningList $ select allUsers
+          mapM_ (liftIO . putStrLn . show) users
+    #+END_SRC
+
+    We will need an instance of show for ~User~, and for that we need the pragma
+    ~{-# LANGUAGE StandaloneDeriving #-}~. 
+
+    #+BEGIN_SRC haskell
+      deriving instance Show User
+    #+END_SRC
+
+*** sorting with ~order by~
+   
+    #+BEGIN_SRC haskell
+      sortByFirstName :: Connection -> IO ()
+      sortByFirstName conn =
+        withDatabaseDebug putStrLn conn $ do
+          users <- runSelectReturningList $ select sortUsersByFirstName
+          mapM_ (liftIO . putStrLn . show) users
+        where
+          sortUsersByFirstName = orderBy_ (\u -> (asc_ (_userFirstName u), desc_ (_userLastName u))) allUsers
+    #+END_SRC
+
+*** bounding results with ~limit_~ and ~offset_~
+   
+    #+BEGIN_SRC haskell
+      boundedquery :: Connection -> IO ()
+      boundedquery conn =
+        withDatabaseDebug putStrLn conn $ do
+          users <- runSelectReturningList $ select boundedQuery
+          mapM_ (liftIO . putStrLn . show) users
+        where
+          boundedQuery = limit_ 1 $ offset_ 1 $ orderBy_ (asc_ . _userFirstName) $ allUsers
+    #+END_SRC
+   
+*** counting with ~aggregate_~
+   
+    #+BEGIN_SRC haskell
+      usercount :: Connection -> IO ()
+      usercount conn =
+        withDatabaseDebug putStrLn conn $ do
+          Just c <- runSelectReturningOne $ select userCount
+          liftIO $ putStrLn ("We have " ++ show c ++ " users in the database")
+        where
+          userCount = aggregate_ (\u -> as_ @Int countAll_) allUsers
+
+      numusersbyname :: Connection -> IO ()
+      numusersbyname conn =
+        withDatabaseDebug putStrLn conn $ do
+          countedByName <- runSelectReturningList $ select numberOfUsersByName
+          mapM_ (liftIO . putStrLn . show) countedByName
+        where
+          numberOfUsersByName = aggregate_ (\u -> (group_ (_userFirstName u), as_ @Int countAll_)) allUsers
+    #+END_SRC
+
+    You will need the pragma ~{-# LANGUAGE TypeApplications #-}~ for the 
+
+    #+BEGIN_SRC haskell
+      as_ @Int count
+    #+END_SRC
+
+    expressions.
+* TODO Beam with postgres - tutorial 2 
+** Adding a related address table
+
+   This is basically the same as ~UserT~, but it contains a reference to a
+   ~UserT~ table, and has an auto incremented id ~addressId~.
+
+   #+BEGIN_SRC haskell
+     data AddressT f = Address
+       { _addressId :: C f (Auto Int)
+       , _addressLine1 :: C f Text
+       , _addressLine2 :: C f (Maybe Text)
+       , _addressCity :: C f Text
+       , _addressState :: C f Text
+       , _addressZip :: C f Text
+       , _addressForUser :: PrimaryKey UserT f
+       } deriving (Generic)
+
+     type Address = AddressT Identity
+     type AddressId = PrimaryKey AddressT Identity
+
+     deriving instance Show UserId
+     deriving instance Show Address
+
+     instance Beamable AddressT
+     instance Beamable (PrimaryKey AddressT)
+
+     instance Table AddressT where
+         data PrimaryKey AddressT f = AddressId (Columnar f (Auto Int)) deriving Generic
+         primaryKey = AddressId . _addressId
+   #+END_SRC
+
+   Need the show instances for UserId and Adress when printing things out. Other
+   than that, it is just like UserT.
+
+** redefining the database type for this new table
+
+   #+BEGIN_SRC haskell
+     data ShoppingCartDb f = ShoppingCartDb
+       { _shoppingCartUsers :: f (TableEntity UserT)
+       , _shoppingCartUserAddresses :: f (TableEntity AddressT)
+       } deriving (Generic)
+   #+END_SRC
+
+   This will have beam operate on a table ~addresses~.  Again, this can be
+   modified if necessary.
+
+** tables with lenses
+
+   #+BEGIN_SRC haskell
+     Address (LensFor addressId)    (LensFor addressLine1)
+             (LensFor addressLine2) (LensFor addressCity)
+             (LensFor addressState) (LensFor addressZip)
+             (UserId (LensFor addressForUserId)) =
+             tableLenses
+
+     User (LensFor userEmail)    (LensFor userFirstName)
+          (LensFor userLastName) (LensFor userPassword) =
+          tableLenses
+   #+END_SRC
+
+** databases with lenses
+
+   #+BEGIN_SRC haskell
+     ShoppingCartDb (TableLens shoppingCartUsers)
+                    (TableLens shoppingCartUserAddresses) =
+                    dbLenses
+   #+END_SRC
+
+** all addresses
+
+   Much like allUsers, except here we are using the lenses we defined.
+
+   #+BEGIN_SRC haskell
+     import Control.Lens
+
+     allAddresses :: Q PgSelectSyntax ShoppingCartDb s (AddressT (QExpr PgExpressionSyntax s))
+     allAddresses = all_ (shoppingCartDb ^. shoppingCartUserAddresses)
+   #+END_SRC
+
+** inserting users
+
+   We need to define the users globally, because we need the foreign key
+   reference when creating Address instances.
+
+   #+BEGIN_SRC haskell
+     james :: User
+     james = User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c"
+
+     betty :: User
+     betty = User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f"
+
+     sam :: User
+     sam = User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c"
+
+     insertUsers :: Connection -> IO ()
+     insertUsers conn =
+       withDatabaseDebug putStrLn conn $ B.runInsert $
+         B.insert (_shoppingCartUsers shoppingCartDb) $
+         insertValues [james, betty, sam]
+
+   #+END_SRC
+
+** inserting addresses
+
+   The only thing that is different from inserting users is the ~(pk betty)~
+   etc. for the foreign key reference.
+
+   #+BEGIN_SRC haskell
+     insertAddresses :: Connection -> IO ()
+     insertAddresses conn =
+       withDatabaseDebug putStrLn conn $ B.runInsert $
+         B.insert (_shoppingCartUserAddresses shoppingCartDb) $
+         insertValues [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
+                      , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
+                      , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty)
+                      ]
+   #+END_SRC
+
+** TODO selecting all users and addresses as pairs  :ask:tutorial conflict:
+
+*** TODO getting all pairs, like the list monad                          :ask:error thrown:
+
+    This is what the tutorial has you do, but this doesn't work in postgres.
+
+    #+BEGIN_SRC haskell
+      selectAllUsersAndAddresses :: Connection -> IO ([(User, Address)])
+      selectAllUsersAndAddresses conn =
+        withDatabaseDebug putStrLn conn $ runSelectReturningList $ select $ do
+          address <- allAddresses
+          user <- allUsers
+          return (user, address)
+    #+END_SRC
+
+    The debug shows the sql being produced as what the tutorial expects
+
+    #+BEGIN_SRC sql
+      SELECT
+        "t1"."email" AS "res0",
+        "t1"."first_name" AS "res1",
+        "t1"."last_name" AS "res2",
+        "t1"."password" AS "res3",
+        "t0"."id" AS "res4",
+        "t0"."address1" AS "res5",
+        "t0"."address2" AS "res6",
+        "t0"."city" AS "res7",
+        "t0"."state" AS "res8",
+        "t0"."zip" AS "res9",
+        "t0"."for_user__email" AS "res10"
+      FROM "cart_user_addresses" AS "t0"
+      INNER JOIN "cart_users" AS "t1"
+    #+END_SRC
+
+    But, at lest for postgres, this yields the error
+
+    #+BEGIN_SRC text
+      *** Exception: SqlError {sqlState = "42601", sqlExecStatus = FatalError, sqlErrorMsg = "syntax error at end of input", sqlErrorDetail = "", sqlErrorHint = ""}
+    #+END_SRC
+    
+**** TODO using beam to generate where clause doesn't work with postgres  :ask:doesnt work:
+***** TODO using guard to form a where clause                                 :ask:error thrown:
+
+      We can use a guard to make sure we only get the combinations of users and
+      addresses that are related by their foreign key.
+
+      #+BEGIN_SRC haskell
+        relatedUserAndAddressesWithGuard :: Connection -> IO [(User, Address)]
+        relatedUserAndAddressesWithGuard conn =
+          withDatabaseDebug putStrLn conn $ runSelectReturningList $ select $ do
+            user <- allUsers
+            address <- allAddresses
+            guard_ (address ^. addressForUserId ==. user ^. userEmail)
+            return (user, address)
+      #+END_SRC
+
+      The sql generated is the same as in the tutorial
+
+      #+BEGIN_SRC sql
+        SELECT "t0"."email" AS "res0",
+          "t0"."first_name" AS "res1",
+          "t0"."last_name" AS "res2",
+          "t0"."password" AS "res3",
+          "t1"."id" AS "res4",
+          "t1"."address1" AS "res5",
+          "t1"."address2" AS "res6",
+          "t1"."city" AS "res7",
+          "t1"."state" AS "res8",
+          "t1"."zip" AS "res9",
+          "t1"."for_user__email" AS "res10"
+        FROM "cart_users" AS "t0"
+        INNER JOIN "cart_user_addresses" AS "t1"
+        WHERE ("t1"."for_user__email") = ("t0"."email")
+      #+END_SRC
+
+      Except this doesn't work in postgres, yielding this error
+
+      #+BEGIN_SRC text
+        *** Exception: SqlError {sqlState = "42601", sqlExecStatus = FatalError, sqlErrorMsg = "syntax error at or near \"WHERE\"", sqlErrorDetail = "", sqlErrorHint = ""}
+      #+END_SRC
+
+***** TODO getting the inner join through references, beam automatically generate clause matching primary keys  :ask:error thrown:
+
+      #+BEGIN_SRC haskell
+        selectUsersAndAddessesWithReferences :: Connection -> IO [(User, Address)]
+        selectUsersAndAddessesWithReferences conn =
+          withDatabaseDebug putStrLn conn $ runSelectReturningList $ select $ do
+            user <- allUsers
+            address <- allAddresses
+            guard_ (_addressForUser address `references_` user)
+            return (user, address)
+      #+END_SRC
+
+      Again, this generates the same sql from the tutorial, 
+
+      #+BEGIN_SRC sql
+        SELECT "t0"."email" AS "res0",
+          "t0"."first_name" AS "res1",
+          "t0"."last_name" AS "res2",
+          "t0"."password" AS "res3",
+          "t1"."id" AS "res4",
+          "t1"."address1" AS "res5",
+          "t1"."address2" AS "res6",
+          "t1"."city" AS "res7",
+          "t1"."state" AS "res8",
+          "t1"."zip" AS "res9",
+          "t1"."for_user__email" AS "res10"
+        FROM "cart_users" AS "t0"
+        INNER JOIN "cart_user_addresses" AS "t1"
+        WHERE ("t1"."for_user__email") = ("t0"."email")
+      #+END_SRC
+
+      but just doesn't work in postgres, yielding this error
+
+      #+BEGIN_SRC text
+        *** Exception: SqlError {sqlState = "42601", sqlExecStatus = FatalError, sqlErrorMsg = "syntax error at or near \"WHERE\"", sqlErrorDetail = "", sqlErrorHint = ""}
+      #+END_SRC
+      
+**** TODO using on clause with related_ to get postgres to work         :ask:
+
+     #+BEGIN_SRC haskell
+       selectAllUsersAndAddresses :: Connection -> IO ([(User, Address)])
+       selectAllUsersAndAddresses conn =
+         withDatabaseDebug putStrLn conn $ runSelectReturningList $ select $ do
+           address <- allAddresses
+           user <- related_ (shoppingCartDb ^. shoppingCartUsers) (_addressForUser address)
+           return (user, address)
+     #+END_SRC
+
+     This def gets postgres to work, though there is the clunky lens and normal
+     record accessor syntax mixed in.  Would be nice to get it all as accessors
+     with lens.
+
+     The sql is correct with the tutorial as well
+
+     #+BEGIN_SRC sql
+       SELECT "t1"."email" AS "res0",
+         "t1"."first_name" AS "res1",
+         "t1"."last_name" AS "res2",
+         "t1"."password" AS "res3",
+         "t0"."id" AS "res4",
+         "t0"."address1" AS "res5",
+         "t0"."address2" AS "res6",
+         "t0"."city" AS "res7",
+         "t0"."state" AS "res8",
+         "t0"."zip" AS "res9",
+         "t0"."for_user__email" AS "res10"
+       FROM "cart_user_addresses" AS "t0"
+       INNER JOIN "cart_users" AS "t1"
+       ON ("t0"."for_user__email") = ("t1"."email")
+     #+END_SRC
+
+*** selecting a specific user with id
+
+    We can select all addresses that belong to Betty with a guard_ clause,
+    producing a where clause in the sql.
+
+    #+BEGIN_SRC haskell
+      bettyEmail :: Text
+      bettyEmail = "betty@example.com"
+
+      selectAddressForBetty :: Connection -> IO [Address]
+      selectAddressForBetty conn =
+        withDatabaseDebug putStrLn conn $
+          runSelectReturningList $ select $ do
+            address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
+            guard_ (address ^. addressForUserId ==. val_ bettyEmail)
+            return address
+    #+END_SRC
+
+** updating rows in the database
+
+*** with save
+
+    #+BEGIN_SRC haskell
+      updatingUserWithSave :: Connection -> IO ()
+      updatingUserWithSave conn = do
+        [james] <- withDatabaseDebug putStrLn conn $
+                   do
+                     runUpdate $
+                       save (shoppingCartDb ^. shoppingCartUsers) (james {_userPassword = "52a516ca6df436828d9c0d26e31ef704" })
+
+                     runSelectReturningList $
+                       B.lookup (shoppingCartDb ^. shoppingCartUsers) (UserId "james@example.com")
+
+        putStrLn ("James's new password is " ++ show (james ^. userPassword))
+    #+END_SRC
+
+    This has the disadvantage of needing a full user to update, and it updates
+    every column for that user, even if something didn't change.
+
+*** with update
+
+    Using an update statement, lets you update less certain fields only,
+    multiple rows, or lets you use other criteria than a primary key match.
+
+    #+BEGIN_SRC haskell
+      updatingAddressesWithFinerGrainedControl :: Connection -> IO ()
+      updatingAddressesWithFinerGrainedControl conn = do
+        addresses <- withDatabaseDebug putStrLn conn $
+                     do
+                       runUpdate $
+                          update (shoppingCartDb ^. shoppingCartUserAddresses)
+                                 (\address -> [ address ^. addressCity <-. val_ "Sugarville"
+                                              , address ^. addressZip <-. "12345"])
+                                 (\address -> address ^. addressCity ==. val_ "Sugarland" &&.
+                                              address ^. addressState ==. val_ "TX")
+                       runSelectReturningList $ select $ all_ (shoppingCartDb ^. shoppingCartUserAddresses)
+
+        mapM_ print addresses
+
+    #+END_SRC
+
+** TODO deletions with delete                                           :ask:
+
+   The tutorial has this,
+
+   #+BEGIN_SRC haskell
+     deleteBettysHoustonAddress :: Connection -> IO ()
+     deleteBettysHoustonAddress conn =
+       withDatabaseDebug putStrLn conn $
+       runDelete $ delete (shoppingCartDb ^. shoppingCartUserAddresses)
+                          (\address -> address ^. addressCity ==. "Houston" &&.
+                                       _addressForUser address `references_` betty)
+   #+END_SRC
+
+   unfortunately this yields a compiler error
+
+   #+BEGIN_SRC haskell
+     • Couldn't match type ‘Identity’
+                     with ‘QGenExpr QValueContext PgExpressionSyntax s’
+       Expected type: UserT (QGenExpr QValueContext PgExpressionSyntax s)
+         Actual type: UserT Identity
+     • In the second argument of ‘references_’, namely ‘betty’
+   #+END_SRC
+
+   I figured out that ~val_~ eliminates the compiler error and works like the
+   tutorial says it should.
+
+   I am guessing that this is a documentation error I can ask about and then PR
+   to fix.  Maybe some documentation on ~val_~ wouldn't be a bad thing either.
+   This really came about from just playing with different ways to get rid of
+   the compiler error and was not the first thing I thought of, as it didn't
+   seem immediately obvious to me.
+
+* TODO Beam with postgres - tutorial 3
+** add support for products table
+
+   #+BEGIN_SRC haskell
+     data ProductT f = Product
+       { _productId          :: C f (Auto Int)
+       , _productTitle       :: C f Text
+       , _productDescription :: C f Text
+       , _productPrice       :: C f Int {- Price in cents -}
+       } deriving (Generic)
+
+     type Product = ProductT Identity
+     deriving instance Show Product
+
+     instance Table ProductT where
+       data PrimaryKey ProductT f = ProductId (Columnar f (Auto Int)) deriving Generic
+       primaryKey = ProductId . _productId
+
+     instance Beamable ProductT
+     instance Beamable (PrimaryKey ProductT)
+   #+END_SRC
+
+** add support for orders and shipping table
+
+*** order table
+
+    The order table needs the time library, and the import ~Data.Time~.
+
+    It has a foreign key to the user who ordered it, to the address of the user,
+    and to the shipping information where it should go to.
+
+    The shipping information foreign key is optional, hence the ~Nullable~
+    declaration.  This is present in the tutorial to show some of the features
+    of beam off, but unless this is legacy and the schema is already like this,
+    it is better to have a primary key on the shipping info and not make it
+    nullable, but we will do it like the tutorial does it.
+
+    #+BEGIN_SRC haskell
+      deriving instance Show (PrimaryKey AddressT Identity)
+
+      data OrderT f = Order
+        { _orderId            :: Columnar f (Auto Int)
+        , _orderDate          :: Columnar f LocalTime
+        , _orderForUser       :: PrimaryKey UserT f
+        , _orderShipToAddress :: PrimaryKey AddressT f
+        , _orderShippingInfo  :: PrimaryKey ShippingInfoT (Nullable f)
+        } deriving (Generic)
+
+      type Order = OrderT Identity
+      deriving instance Show Order
+
+      instance Table OrderT where
+          data PrimaryKey OrderT f = OrderId (Columnar f (Auto Int))
+                                     deriving Generic
+          primaryKey = OrderId . _orderId
+
+      instance Beamable OrderT
+      instance Beamable (PrimaryKey OrderT)
+    #+END_SRC
+
+*** shipping table
+
+    Again, unless legacy or something, probably should make this a non nullable
+    primary key for shipping info.
+
+    The only other thing to note is that we will need to tell postgres how to
+    store the enumeration ShippingCarrier.
+
+    #+BEGIN_SRC haskell
+      data ShippingCarrier
+        = USPS
+        | FedEx
+        | UPS
+        | DHL
+        deriving (Show, Read, Eq, Ord, Enum)
+
+      data ShippingInfoT f = ShippingInfo
+        { _shippingInfoId             :: Columnar f (Auto Int)
+        , _shippingInfoCarrier        :: Columnar f ShippingCarrier
+        , _shippingInfoTrackingNumber :: Columnar f Text
+        } deriving (Generic)
+
+      type ShippingInfo = ShippingInfoT Identity
+      deriving instance Show ShippingInfo
+
+      instance Table ShippingInfoT where
+          data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f (Auto Int))
+                                            deriving Generic
+          primaryKey = ShippingInfoId . _shippingInfoId
+
+      instance Beamable ShippingInfoT
+      instance Beamable (PrimaryKey ShippingInfoT)
+      deriving instance Show (PrimaryKey ShippingInfoT (Nullable Identity))
+    #+END_SRC
+
+** add support for a list of products with each order (line item)
+
+   Note the applicative bind for the line items id -- it takes two parameters
+   for a key, the orders primary key, and the products primary key.
+
+   You know how applicatives work, if not go read it again because it is a whole
+   other thing to explain :)
+
+   #+BEGIN_SRC haskell
+     deriving instance Show (PrimaryKey OrderT Identity)
+     deriving instance Show (PrimaryKey ProductT Identity)
+
+     data LineItemT f = LineItem
+       { _lineItemInOrder :: PrimaryKey OrderT f
+       , _lineItemForProduct :: PrimaryKey ProductT f
+       , _lineItemQuantity :: Columnar f Int
+       } deriving (Generic)
+
+     type LineItem = LineItemT Identity
+     deriving instance Show LineItem
+
+     instance Table LineItemT where
+         data PrimaryKey LineItemT f = LineItemId (PrimaryKey OrderT f) (PrimaryKey ProductT f)
+                                       deriving Generic
+         primaryKey = LineItemId <$> _lineItemInOrder <*> _lineItemForProduct
+
+     instance Beamable LineItemT
+     instance Beamable (PrimaryKey LineItemT)
+   #+END_SRC
+
+** adding these databases to beam
+
+   #+BEGIN_SRC haskell
+     data ShoppingCartDb f = ShoppingCartDb
+       { _shoppingCartUsers         :: f (TableEntity UserT)
+       , _shoppingCartUserAddresses :: f (TableEntity AddressT)
+       , _shoppingCartProducts      :: f (TableEntity ProductT)
+       , _shoppingCartOrders        :: f (TableEntity OrderT)
+       , _shoppingCartShippingInfos :: f (TableEntity ShippingInfoT)
+       , _shoppingCartLineItems     :: f (TableEntity LineItemT)
+       } deriving (Generic)
+   #+END_SRC
+
+** lenses
+
+   #+BEGIN_SRC haskell
+     LineItem _ _ (LensFor lineItemQuantity) = tableLenses
+
+     Product (LensFor productId)          (LensFor productTitle)
+             (LensFor productDescription) (LensFor productPrice) = tableLenses
+
+     ShoppingCartDb (TableLens shoppingCartUsers) (TableLens shoppingCartUserAddresses)
+                    (TableLens shoppingCartProducts) (TableLens shoppingCartOrders)
+                    (TableLens shoppingCartShippingInfos) (TableLens shoppingCartLineItems) = dbLenses
+   #+END_SRC
+
+   You can notice the tutorial skips convenience lenses for order and shipping
+   info for some reason.
+
+   It also skips lenses for line items foreign keys to order and product
+
+** changing default db settings
+
+   #+BEGIN_SRC haskell
+     shoppingCartDb :: DatabaseSettings be ShoppingCartDb
+     shoppingCartDb =
+       defaultDbSettings `withDbModification`
+       dbModification
+       { _shoppingCartUserAddresses =
+           modifyTable (\_ -> "addresses") $
+           tableModification
+           { _addressLine1 = fieldNamed "address1"
+           , _addressLine2 = fieldNamed "address2"
+           }
+       , _shoppingCartProducts = modifyTable (\_ -> "products") tableModification
+       , _shoppingCartOrders =
+           modifyTable (\_ -> "orders") $
+           tableModification
+           {_orderShippingInfo = ShippingInfoId "shipping_info__id"}
+       , _shoppingCartShippingInfos =
+           modifyTable (\_ -> "shipping_info") $
+           tableModification
+           { _shippingInfoId = "id"
+           , _shippingInfoCarrier = "carrier"
+           , _shippingInfoTrackingNumber = "tracking_number"
+           }
+       , _shoppingCartLineItems = modifyTable (\_ -> "line_items") tableModification
+       }
+
+   #+END_SRC
+
+   this lets us be more haskelly with the records, at least with their names and
+   lenses if we want them, but keeping the sql reasonable and conventional as well.
+
+   This is like the marriage of both of these naming conventions.
+
+   The data type address is really addresses in the database
+
+   the field _addressLine1 would be defaulted in beam to column with the name
+   line1, but we want our sql column to be named address1 instead.
+
+   the same thing is happening to products, orders, shipping info and line items.
+
+** TODO inserting into database (fixtures) 
+
+*** users
+
+    Using a cool syntax to destructure and bind at the same time.
+
+    #+BEGIN_SRC haskell
+      users :: [User]
+      users@[james, betty, sam] = [ User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c"
+                                  , User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f"
+                                  , User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c"]
+
+      insertUsers :: Connection -> IO ()
+      insertUsers conn =
+        withDatabaseDebug putStrLn conn $ B.runInsert $
+          B.insert (_shoppingCartUsers shoppingCartDb) $
+          insertValues users
+    #+END_SRC
+*** TODO addresses                                      :ask:insertReturning:
+
+    #+BEGIN_SRC haskell
+      addresses :: [Address]
+      addresses = [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
+                  , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
+                  , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty)
+                  ]
+    #+END_SRC
+
+**** TODO insertReturning only in postgres and failing
+
+     #+BEGIN_SRC haskell
+       insertAddresses :: Connection -> IO [Address]
+       insertAddresses conn = do
+         az@[jamesAddress1, bettyAddress1, bettyAddress2] <-
+             runInsertReturning $
+             insertReturning (shoppingCartDb ^. shoppingCartUserAddresses) $ insertValues addresses
+         return az
+     #+END_SRC
+
+     The tutorial says sqlite has ~insertReturningList~ but postgres backend
+     only has ~insertReturning~ and then the error is that
+
+     #+BEGIN_SRC text
+       error:
+            • Couldn't match type ‘Pg’ with ‘(->) (PgInsertReturning a1)’
+                arising from a functional dependency between:
+                  constraint ‘MonadBeam
+                                syntax0 be0 Connection ((->) (PgInsertReturning a1))’
+                    arising from a use of ‘withDatabaseDebug’
+                  instance ‘MonadBeam PgCommandSyntax Postgres Connection Pg’
+                    at <no location info>
+            • In the expression: withDatabaseDebug putStrLn conn
+              In the expression:
+                withDatabaseDebug putStrLn conn
+                $ runInsertReturning
+                  $ insertReturning (shoppingCartDb ^. shoppingCartUserAddresses)
+                    $ insertValues addresses
+              In an equation for ‘insertAddresses’:
+                  insertAddresses conn
+                    = withDatabaseDebug putStrLn conn
+                      $ runInsertReturning
+                        $ insertReturning (shoppingCartDb ^. shoppingCartUserAddresses)
+                          $ insertValues addresses (intero)
+
+     #+END_SRC
+**** regular old insert without returning works
+
+     #+BEGIN_SRC haskell
+       insertAddresses :: Connection -> IO ()
+       insertAddresses conn =
+         withDatabaseDebug putStrLn conn $ B.runInsert $
+           B.insert (shoppingCartDb ^. shoppingCartUserAddresses) $
+           insertValues addresses
+     #+END_SRC
+*** TODO products                                       :ask:insertReturning:
+
+    #+BEGIN_SRC haskell
+      products :: [Product]
+      products = [ Product (Auto Nothing) "Red Ball" "A bright red, very spherical ball" 1000
+                 , Product (Auto Nothing) "Math Textbook" "Contains a lot of important math theorems and formulae" 2500
+                 , Product (Auto Nothing) "Intro to Haskell" "Learn the best programming language in the world" 3000
+                 , Product (Auto Nothing) "Suitcase" "A hard durable suitcase" 15000
+                 ]
+
+      insertProducts :: Connection -> IO [Product]
+      insertProducts conn =
+        withDatabaseDebug putStrLn conn $
+          runInsertReturning $
+          insertReturning (shoppingCartDb ^. shoppingCartProducts) $ insertValues products
+    #+END_SRC
+
+**** TODO insertReturning only in postgres and failing
+     Same as with addresses, ~insertReturningList~ just blows up.
+
+     #+BEGIN_SRC text
+      error:
+          • Couldn't match type ‘Pg’ with ‘(->) (PgInsertReturning a2)’
+              arising from a functional dependency between:
+                constraint ‘MonadBeam
+                              syntax0 be0 Connection ((->) (PgInsertReturning a2))’
+                  arising from a use of ‘withDatabaseDebug’
+                instance ‘MonadBeam PgCommandSyntax Postgres Connection Pg’
+                  at <no location info>
+          • In the expression: withDatabaseDebug putStrLn conn
+            In the expression:
+              withDatabaseDebug putStrLn conn
+              $ runInsertReturning
+                $ insertReturning (shoppingCartDb ^. shoppingCartUserAddresses)
+                  $ insertValues products
+            In an equation for ‘insertProducts’:
+                insertProducts conn
+                  = withDatabaseDebug putStrLn conn
+                    $ runInsertReturning
+                      $ insertReturning (shoppingCartDb ^. shoppingCartUserAddresses)
+                        $ insertValues products (intero)
+    #+END_SRC
+**** regular old insert without returning works
+
+     #+BEGIN_SRC haskell
+       insertProducts :: Connection -> IO ()
+       insertProducts conn =
+         withDatabaseDebug putStrLn conn $ B.runInsert $
+           B.insert (shoppingCartDb ^. shoppingCartProducts) $
+           insertValues products
+     #+END_SRC
+*** TODO shipping information                               :ask:marshalling:
+
+    Inserting shipping information makes us marshall the ~ShippingCarrier~ enumeration.
+
+    We will try to insert one shipping info row into the database.
+
+    #+BEGIN_SRC haskell
+      shippingInfos :: [ShippingInfo]
+      shippingInfos = [ ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI" ]
+
+      insertShippingInfo :: Connection -> IO ()
+      insertShippingInfo conn =
+        withDatabaseDebug putStrLn conn $ B.runInsert $
+        B.insert (shoppingCartDb ^. shoppingCartShippingInfos) $
+        insertValues shippingInfos
+    #+END_SRC
+
+    But boom!  We get an error
+
+    #+BEGIN_SRC text
+      error:
+           • No instance for (Database.Beam.Backend.SQL.SQL92.HasSqlValueSyntax
+                                PgValueSyntax ShippingCarrier)
+               arising from a use of ‘insertValues’
+           • In the second argument of ‘($)’, namely
+               ‘insertValues shippingInfos’
+             In the second argument of ‘($)’, namely
+               ‘B.insert (shoppingCartDb ^. shoppingCartShippingInfos)
+                $ insertValues shippingInfos’
+             In the second argument of ‘($)’, namely
+               ‘B.runInsert
+                $ B.insert (shoppingCartDb ^. shoppingCartShippingInfos)
+                  $ insertValues shippingInfos’ (intero)
+    #+END_SRC
+
+    This matches up with the tutorial so far, but the tutorial also has one
+    extra compiler error that I just don't see.
+
+    #+BEGIN_SRC text
+      * No instance for (Database.Beam.Backend.Types.FromBackendRow
+                               Sqlite ShippingCarrier)
+              arising from a use of 'runInsertReturningList'
+    #+END_SRC
+
+    Probably because i'm not running ~runInsertReturningList~ because it doesn't
+    work with postgres so far that i've seen.
+
+**** TODO continuing trying to marshall with the tutorial                :ask:more explicit:
+
+     #+BEGIN_SRC haskell
+       {-# LANGUAGE UndecidableInstances #-}
+       import Database.Beam.Backend.SQL
+
+       instance HasSqlValueSyntax be String => HasSqlValueSyntax be ShippingCarrier where
+         sqlValueSyntax = autoSqlValueSyntax
+     #+END_SRC
+
+     But boom again!  This time with an error that is not present in the
+     tutorial (but that is followable):
+
+     #+BEGIN_SRC text
+       error:
+       • Illegal instance declaration for
+           ‘HasSqlValueSyntax be ShippingCarrier’
+           (Only one type can be given in an instance head.
+           Use MultiParamTypeClasses if you want to allow more, or zero.)
+       • In the instance declaration for
+           ‘HasSqlValueSyntax be ShippingCarrier’
+     #+END_SRC
+
+     Adding 
+
+     #+BEGIN_SRC haskell
+       {-# LANGUAGE MultiParamTypeClasses #-}
+     #+END_SRC
+
+     takes that error away just fine.  The tutorial doesn't mention this
+     expicitly, but it is still pretty easy to follow.
+
+**** TODO Continuing marshalling still with tutorial                     :ask:compile error:
+
+     #+BEGIN_SRC haskell
+       instance FromBackendRow Postgres ShippingCarrier
+     #+END_SRC
+     
+     This doesn't work because there is no backend instance for unmarshalling
+     the datatype.  This can be seen in the compile error:
+
+     #+BEGIN_SRC text
+       • No instance for (Database.PostgreSQL.Simple.FromField.FromField
+                                 ShippingCarrier)
+                arising from a use of ‘Database.Beam.Backend.Types.$dmfromBackendRow’
+            • In the expression:
+                Database.Beam.Backend.Types.$dmfromBackendRow
+                  @Postgres @ShippingCarrier
+              In an equation for ‘fromBackendRow’:
+                  fromBackendRow
+                    = Database.Beam.Backend.Types.$dmfromBackendRow
+                        @Postgres @ShippingCarrier
+              In the instance declaration for
+                ‘FromBackendRow Postgres ShippingCarrier’ (intero)
+     #+END_SRC
+
+     Trying to fix that with
+
+     #+BEGIN_SRC haskell
+       import Database.PostgreSQL.Simple.FromField
+       import Text.Read
+
+       instance FromField ShippingCarrier where
+         fromField f = do x <- readMaybe <$> fromField f
+                          case x of
+                            Nothing -> returnError ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
+                            Just x -> pure x
+     #+END_SRC
+
+     Except in the tutorial, the FromBackendRow instance is written as
+
+     #+BEGIN_SRC haskell
+       instance FromBackendRow be ShippingCarrier
+     #+END_SRC
+
+     If we do that we get 4 errors:
+
+     1. 
+
+         #+BEGIN_SRC text
+           error:
+                • Couldn't match expected type ‘Maybe
+                                                  bytestring-0.10.8.1:Data.ByteString.Internal.ByteString
+                                                -> Conversion ShippingCarrier’
+                              with actual type ‘Conversion b0’
+                • In a stmt of a 'do' block: x <- readMaybe <$> fromField f
+                  In the expression:
+                    do { x <- readMaybe <$> fromField f;
+                         case x of {
+                           Nothing
+                             -> returnError
+                                  ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
+                           Just x -> pure x } }
+                  In an equation for ‘fromField’:
+                      fromField f
+                        = do { x <- readMaybe <$> fromField f;
+                               case x of {
+                                 Nothing
+                                   -> returnError
+                                        ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
+                                 Just x -> pure x } } (intero)
+         #+END_SRC
+
+     2. 
+
+        #+BEGIN_SRC text
+          error:
+               • Couldn't match expected type ‘Conversion String’
+                             with actual type ‘Maybe
+                                                 bytestring-0.10.8.1:Data.ByteString.Internal.ByteString
+                                               -> Conversion a0’
+               • Probable cause: ‘fromField’ is applied to too few arguments
+                 In the second argument of ‘(<$>)’, namely ‘fromField f’
+                 In a stmt of a 'do' block: x <- readMaybe <$> fromField f
+                 In the expression:
+                   do { x <- readMaybe <$> fromField f;
+                        case x of {
+                          Nothing
+                            -> returnError
+                                 ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
+                          Just x -> pure x } } (intero)
+        #+END_SRC
+
+     3. 
+
+        #+BEGIN_SRC text
+          error:
+            • Could not deduce: BackendFromField be ShippingCarrier
+                arising from a use of ‘Database.Beam.Backend.Types.$dmfromBackendRow’
+            • In the expression:
+                Database.Beam.Backend.Types.$dmfromBackendRow @be @ShippingCarrier
+              In an equation for ‘fromBackendRow’:
+                  fromBackendRow
+                    = Database.Beam.Backend.Types.$dmfromBackendRow
+                        @be @ShippingCarrier
+              In the instance declaration for ‘FromBackendRow be ShippingCarrier’
+            • Relevant bindings include
+                fromBackendRow :: FromBackendRowM be ShippingCarrier
+                  (bound at /Users/jacobono/dev/haskell/beam-tutorial/.stack-work/intero/intero16371x5B.hs:168:10) (intero)
+        #+END_SRC
+
+     4. 
+
+        #+BEGIN_SRC text
+          error:
+            • No instance for (BeamBackend be)
+                arising from the superclasses of an instance declaration
+              Possible fix:
+                add (BeamBackend be) to the context of the instance declaration
+            • In the instance declaration for
+                ‘FromBackendRow be ShippingCarrier’ (intero)
+        #+END_SRC
+
+     Changing the ~be~ to ~Postgres~ 
+
+     #+BEGIN_SRC haskell
+       instance FromBackendRow Postgres ShippingCarrier
+     #+END_SRC
+
+     We only get 2 compile errors:
+
+     1. 
+
+        #+BEGIN_SRC text
+          error:
+            • Couldn't match expected type ‘Maybe
+                                              bytestring-0.10.8.1:Data.ByteString.Internal.ByteString
+                                            -> Conversion ShippingCarrier’
+                          with actual type ‘Conversion b0’
+            • In a stmt of a 'do' block: x <- readMaybe <$> fromField f
+              In the expression:
+                do { x <- readMaybe <$> fromField f;
+                     case x of {
+                       Nothing
+                         -> returnError
+                              ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
+                       Just x -> pure x } }
+              In an equation for ‘fromField’:
+                  fromField f
+                    = do { x <- readMaybe <$> fromField f;
+                           case x of {
+                             Nothing
+                               -> returnError
+                                    ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
+                             Just x -> pure x } } (intero)
+        #+END_SRC
+
+     2. 
+
+        #+BEGIN_SRC text
+          error:
+            • Couldn't match expected type ‘Conversion String’
+                          with actual type ‘Maybe
+                                              bytestring-0.10.8.1:Data.ByteString.Internal.ByteString
+                                            -> Conversion a0’
+            • Probable cause: ‘fromField’ is applied to too few arguments
+              In the second argument of ‘(<$>)’, namely ‘fromField f’
+              In a stmt of a 'do' block: x <- readMaybe <$> fromField f
+              In the expression:
+                do { x <- readMaybe <$> fromField f;
+                     case x of {
+                       Nothing
+                         -> returnError
+                              ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
+                       Just x -> pure x } } (intero)
+        #+END_SRC
+
+     So that takes care of error 3 and 4 from above, but then i'm stuck with
+     these two here.  Sad face.
+
+     I'm guessing this works for sqlite, and just not postgres, but I think I
+     will need to reach out for some help / a look over.
+
+     
