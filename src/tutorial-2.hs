@@ -112,6 +112,29 @@ selectAllUsers conn =
     mapM_ (liftIO . putStrLn . show) users
 
 
+selectAllUsersAndAddressPairs :: Connection -> IO ([(User, Address)])
+selectAllUsersAndAddressPairs conn =
+  withDatabaseDebug putStrLn conn $ runSelectReturningList $ select $ do
+    address <- allAddresses
+    user <- allUsers
+    return (user, address)
+
+relatedUserAndAddressesWithGuard :: Connection -> IO [(User, Address)]
+relatedUserAndAddressesWithGuard conn =
+  withDatabaseDebug putStrLn conn $ runSelectReturningList $ select $ do
+    user <- allUsers
+    address <- allAddresses
+    guard_ (address ^. addressForUserId ==. user ^. userEmail)
+    return (user, address)
+
+selectUsersAndAddessesWithReferences :: Connection -> IO [(User, Address)]
+selectUsersAndAddessesWithReferences conn =
+  withDatabaseDebug putStrLn conn $ runSelectReturningList $ select $ do
+    user <- allUsers
+    address <- allAddresses
+    guard_ (_addressForUser address `references_` user)
+    return (user, address)
+
 selectAllUsersAndAddresses :: Connection -> IO ([(User, Address)])
 selectAllUsersAndAddresses conn =
   withDatabaseDebug putStrLn conn $ runSelectReturningList $ select $ do
@@ -122,12 +145,23 @@ selectAllUsersAndAddresses conn =
 bettyEmail :: Text
 bettyEmail = "betty@example.com"
 
-selectAddressForBetty :: Connection -> IO [Address]
-selectAddressForBetty conn =
+selectAddressForBettyEmail :: Connection -> IO [Address]
+selectAddressForBettyEmail conn =
   withDatabaseDebug putStrLn conn $
     runSelectReturningList $ select $ do
       address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
       guard_ (address ^. addressForUserId ==. val_ bettyEmail)
+      return address
+
+bettyId :: UserId
+bettyId = UserId "betty@example.com"
+
+selectAddressForBettyId :: Connection -> IO [Address]
+selectAddressForBettyId conn =
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $ select $ do
+      address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
+      guard_ (_addressForUser address ==. val_ bettyId)
       return address
 
 updatingUserWithSave :: Connection -> IO ()

@@ -420,22 +420,20 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
                       ]
    #+END_SRC
 
-** TODO selecting all users and addresses as pairs  :ask:tutorial conflict:
+** selecting all users and addresses as pairs
 
-*** TODO getting all pairs, like the list monad                          :ask:error thrown:
-
-    This is what the tutorial has you do, but this doesn't work in postgres.
+*** getting all pairs, like the list monad
 
     #+BEGIN_SRC haskell
-      selectAllUsersAndAddresses :: Connection -> IO ([(User, Address)])
-      selectAllUsersAndAddresses conn =
+      selectAllUsersAndAddressPairs :: Connection -> IO ([(User, Address)])
+      selectAllUsersAndAddressPairs conn =
         withDatabaseDebug putStrLn conn $ runSelectReturningList $ select $ do
           address <- allAddresses
           user <- allUsers
           return (user, address)
     #+END_SRC
 
-    The debug shows the sql being produced as what the tutorial expects
+    The sql produced for postgres is:
 
     #+BEGIN_SRC sql
       SELECT
@@ -451,17 +449,11 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
         "t0"."zip" AS "res9",
         "t0"."for_user__email" AS "res10"
       FROM "cart_user_addresses" AS "t0"
-      INNER JOIN "cart_users" AS "t1"
+      CROSS JOIN "cart_users" AS "t1"
     #+END_SRC
 
-    But, at lest for postgres, this yields the error
-
-    #+BEGIN_SRC text
-      *** Exception: SqlError {sqlState = "42601", sqlExecStatus = FatalError, sqlErrorMsg = "syntax error at end of input", sqlErrorDetail = "", sqlErrorHint = ""}
-    #+END_SRC
-    
-**** TODO using beam to generate where clause doesn't work with postgres  :ask:doesnt work:
-***** TODO using guard to form a where clause                                 :ask:error thrown:
+**** using beam to generate where clause doesn't work with postgres
+***** using guard to form a where clause
 
       We can use a guard to make sure we only get the combinations of users and
       addresses that are related by their foreign key.
@@ -476,10 +468,11 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
             return (user, address)
       #+END_SRC
 
-      The sql generated is the same as in the tutorial
+      The sql generated for postgres is:
 
       #+BEGIN_SRC sql
-        SELECT "t0"."email" AS "res0",
+        SELECT
+          "t0"."email" AS "res0",
           "t0"."first_name" AS "res1",
           "t0"."last_name" AS "res2",
           "t0"."password" AS "res3",
@@ -491,17 +484,11 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
           "t1"."zip" AS "res9",
           "t1"."for_user__email" AS "res10"
         FROM "cart_users" AS "t0"
-        INNER JOIN "cart_user_addresses" AS "t1"
+        CROSS JOIN "cart_user_addresses" AS "t1"
         WHERE ("t1"."for_user__email") = ("t0"."email")
       #+END_SRC
 
-      Except this doesn't work in postgres, yielding this error
-
-      #+BEGIN_SRC text
-        *** Exception: SqlError {sqlState = "42601", sqlExecStatus = FatalError, sqlErrorMsg = "syntax error at or near \"WHERE\"", sqlErrorDetail = "", sqlErrorHint = ""}
-      #+END_SRC
-
-***** TODO getting the inner join through references, beam automatically generate clause matching primary keys  :ask:error thrown:
+***** getting the inner join through references, beam automatically generate clause matching primary keys  :ask:error thrown:
 
       #+BEGIN_SRC haskell
         selectUsersAndAddessesWithReferences :: Connection -> IO [(User, Address)]
@@ -513,10 +500,11 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
             return (user, address)
       #+END_SRC
 
-      Again, this generates the same sql from the tutorial, 
+      Again, this generates sql for postgres:
 
       #+BEGIN_SRC sql
-        SELECT "t0"."email" AS "res0",
+        SELECT
+          "t0"."email" AS "res0",
           "t0"."first_name" AS "res1",
           "t0"."last_name" AS "res2",
           "t0"."password" AS "res3",
@@ -528,17 +516,11 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
           "t1"."zip" AS "res9",
           "t1"."for_user__email" AS "res10"
         FROM "cart_users" AS "t0"
-        INNER JOIN "cart_user_addresses" AS "t1"
+        CROSS JOIN "cart_user_addresses" AS "t1"
         WHERE ("t1"."for_user__email") = ("t0"."email")
       #+END_SRC
 
-      but just doesn't work in postgres, yielding this error
-
-      #+BEGIN_SRC text
-        *** Exception: SqlError {sqlState = "42601", sqlExecStatus = FatalError, sqlErrorMsg = "syntax error at or near \"WHERE\"", sqlErrorDetail = "", sqlErrorHint = ""}
-      #+END_SRC
-      
-**** TODO using on clause with related_ to get postgres to work         :ask:
+**** TODO using on clause with related_ to get postgres to work          :ask:lens accessor mixing:
 
      #+BEGIN_SRC haskell
        selectAllUsersAndAddresses :: Connection -> IO ([(User, Address)])
@@ -553,7 +535,7 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
      record accessor syntax mixed in.  Would be nice to get it all as accessors
      with lens.
 
-     The sql is correct with the tutorial as well
+     The sql for postgres is:
 
      #+BEGIN_SRC sql
        SELECT "t1"."email" AS "res0",
@@ -577,18 +559,36 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
     We can select all addresses that belong to Betty with a guard_ clause,
     producing a where clause in the sql.
 
+**** TODO from a Text value :what does val_ do?:
+    We can use ~val_~ to ???
+
     #+BEGIN_SRC haskell
       bettyEmail :: Text
       bettyEmail = "betty@example.com"
 
-      selectAddressForBetty :: Connection -> IO [Address]
-      selectAddressForBetty conn =
+      selectAddressForBettyEmail :: Connection -> IO [Address]
+      selectAddressForBettyEmail conn =
         withDatabaseDebug putStrLn conn $
           runSelectReturningList $ select $ do
             address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
             guard_ (address ^. addressForUserId ==. val_ bettyEmail)
             return address
     #+END_SRC
+
+**** TODO from a UserId value :what is the difference between this and above:
+
+     #+BEGIN_SRC haskell
+       bettyId :: UserId
+       bettyId = UserId "betty@example.com"
+
+       selectAddressForBettyId :: Connection -> IO [Address]
+       selectAddressForBettyId conn =
+         withDatabaseDebug putStrLn conn $
+           runSelectReturningList $ select $ do
+             address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
+             guard_ (_addressForUser address ==. val_ bettyId)
+             return address
+     #+END_SRC
 
 ** updating rows in the database
 
@@ -633,7 +633,7 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
 
     #+END_SRC
 
-** TODO deletions with delete                                           :ask:
+** TODO deletions with delete                                            :ask:compiler error val_:
 
    The tutorial has this,
 
