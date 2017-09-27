@@ -72,7 +72,7 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
    #+END_SRC
 
    for this to work
-** TODO defining a table                                  :link:to:other:doc:
+** defining a table
 
    #+BEGIN_SRC haskell
      data UserT f = User
@@ -92,7 +92,7 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
      password
    #+END_SRC
 
-   You can change these, if you like, see the [[http:][BROKEN LINK FIXME]] 
+   You can change these, if you like, see the [[https://tathougies.github.io/beam/user-guide/models/][models section]]
 
    The pragma ~{-# LANGUAGE DeriveGeneric #-}~ is necessary for compilation.
 
