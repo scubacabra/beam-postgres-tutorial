@@ -2,7 +2,7 @@
 
 trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam's tutorial 1]], but for ~postgres~ instead of ~sqlite3~.
 
-** TODO stack setup
+** stack setup
 
    Add this snippet to the ~packages~ section of ~stack.yaml~
 
@@ -16,8 +16,9 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
          - beam-migrate
          - beam-postgres
    #+END_SRC
+   
+   This just fetches the repository at that commit and builds it
 
-*** TODO What does this do?
 ** cabal setup
 
    Add these dependencies to the cabal file
@@ -1245,7 +1246,6 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
     Yields the same sql as the tutorial
 
     #+BEGIN_SRC sql
-      ,#+BEGIN_SRC sql
       SELECT
         "t0"."email" AS "res0",
         "t0"."first_name" AS "res1",
