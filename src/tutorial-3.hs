@@ -251,6 +251,12 @@ insertAddresses conn =
     runInsertReturningList (shoppingCartDb ^. shoppingCartUserAddresses) $
     insertValues addresses
 
+insertShippingInfos :: Connection -> IO [ShippingInfo]
+insertShippingInfos conn =
+ withDatabaseDebug putStrLn conn $
+  runInsertReturningList (shoppingCartDb ^. shoppingCartShippingInfos) $
+  insertValues shippingInfos
+
 insertProducts :: Connection -> IO [Product]
 insertProducts conn =
   withDatabaseDebug putStrLn conn $
