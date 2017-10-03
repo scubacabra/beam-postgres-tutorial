@@ -299,6 +299,14 @@ selectAllUsersAndAddresses conn =
     user <- related_ (shoppingCartDb ^. shoppingCartUsers) (_addressForUser address)
     return (user, address)
 
+selectAllUsersAndOrdersLeftJoin :: Connection -> IO [(User, Maybe Order)]
+selectAllUsersAndOrdersLeftJoin conn =
+  withDatabaseDebug putStrLn conn $
+      runSelectReturningList $ select $ do
+        user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+        order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
+        pure (user, order)
+
 bettyEmail :: Text
 bettyEmail = "betty@example.com"
 
@@ -388,3 +396,4 @@ main = do
   [bettyShippingInfo] <- insertShippingInfos conn
   orders@[jamesOrder1, bettyOrder1, jamesOrder2] <- insertOrders conn addresses bettyShippingInfo
   insertLineItems conn orders products
+  mapM_ print =<< selectAllUsersAndOrdersLeftJoin conn
