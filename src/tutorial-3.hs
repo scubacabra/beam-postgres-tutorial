@@ -263,12 +263,23 @@ insertProducts conn =
     runInsertReturningList (shoppingCartDb ^. shoppingCartProducts) $
     insertValues products
 
+insertOrders :: Connection -> [Address] -> ShippingInfo -> IO [Order]
+insertOrders conn [jamesAddress1, bettyAddress1, bettyAddress2] bettyShippingInfo =
+  do
+    time <- getCurrentTime
+    let localtime = utcToLocalTime utc time
+    withDatabaseDebug putStrLn conn $
+      runInsertReturningList (shoppingCartDb ^. shoppingCartOrders) $
+      insertValues [ Order (Auto Nothing) localtime (pk james) (pk jamesAddress1) nothing_
+                   , Order (Auto Nothing) localtime (pk betty) (pk bettyAddress1) (just_ (pk bettyShippingInfo))
+                   , Order (Auto Nothing) localtime (pk james) (pk jamesAddress1) nothing_
+                   ]
+
 selectAllUsers :: Connection -> IO ()
 selectAllUsers conn =
   withDatabaseDebug putStrLn conn $ do
     users <- runSelectReturningList $ select allUsers
     mapM_ (liftIO . putStrLn . show) users
-
 
 selectAllUsersAndAddresses :: Connection -> IO ([(User, Address)])
 selectAllUsersAndAddresses conn =
@@ -360,4 +371,9 @@ numberOfUsersByName conn =
 main :: IO ()
 main = do
   conn <- connectPostgreSQL "host=localhost dbname=shoppingcart3"
+  insertUsers conn
+  addresses@[jamesAddress1, bettyAddress1, bettyAddress2] <- insertAddresses conn
+  products@[redBall, mathTextbook, introToHaskell, suitcase] <- insertProducts conn
+  [bettyShippingInfo] <- insertShippingInfos conn
+  orders@[jamesOrder1, bettyOrder1, jamesOrder2] <- insertOrders conn addresses bettyShippingInfo
   return ()
