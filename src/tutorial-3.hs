@@ -362,6 +362,20 @@ allUnshippedOrders conn =
     filter_ (isNothing_ . _orderShippingInfo) $
     all_ (shoppingCartDb ^. shoppingCartOrders)
 
+shippingInformationByUser :: Connection -> IO [(User, Int, Int)]
+shippingInformationByUser conn =
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $
+    aggregate_ (\(user, order) ->
+                   let ShippingInfoId shippingInfoId = _orderShippingInfo order
+                   in ( group_ user
+                      , as_ @Int $ count_ (as_ @(Maybe Int) (maybe_ (just_ 1) (\_ -> nothing_) shippingInfoId))
+                      , as_ @Int $ count_ shippingInfoId ) ) $
+    do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+       order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
+       pure (user, order)
+
 bettyEmail :: Text
 bettyEmail = "betty@example.com"
 
