@@ -316,6 +316,14 @@ selectUsersWithNoOrdersLeftJoin conn =
       guard_ (isNothing_ order)
       pure user
 
+selectUsersWithNoOrdersExistsCombinator :: Connection -> IO [User]
+selectUsersWithNoOrdersExistsCombinator conn =
+   withDatabaseDebug putStrLn conn $
+    runSelectReturningList $ select $ do
+      user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+      guard_ (not_ (exists_ (filter_ (\order -> _orderForUser order `references_` user) (all_ (shoppingCartDb ^. shoppingCartOrders)))))
+      pure user
+
 bettyEmail :: Text
 bettyEmail = "betty@example.com"
 
