@@ -337,6 +337,23 @@ ordersWithCostOrdered conn =
         product  <- related_ (shoppingCartDb ^. shoppingCartProducts) (_lineItemForProduct lineItem)
         pure (order, lineItem, product)
 
+allUsersAndTotals :: Connection -> IO [(User, Int)]
+allUsersAndTotals conn =
+  withDatabaseDebug putStrLn conn $
+      runSelectReturningList $
+      select $
+      orderBy_ (\(user, total) -> desc_ total) $
+      aggregate_ (\(user, lineItem, product) ->
+                    (group_ user, sum_ (maybe_ 0 id (_lineItemQuantity lineItem) * maybe_ 0 id (product ^. productPrice)))) $
+      do user     <- all_ (shoppingCartDb ^. shoppingCartUsers)
+         order    <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
+                              (\order -> _orderForUser order `references_` user)
+         lineItem <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartLineItems))
+                              (\lineItem -> maybe_ (val_ False) (\order -> _lineItemInOrder lineItem `references_` order) order)
+         product  <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartProducts))
+                              (\product -> maybe_ (val_ False) (\lineItem -> _lineItemForProduct lineItem `references_` product) lineItem)
+         pure (user, lineItem, product)
+
 bettyEmail :: Text
 bettyEmail = "betty@example.com"
 
