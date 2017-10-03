@@ -275,6 +275,17 @@ insertOrders conn [jamesAddress1, bettyAddress1, bettyAddress2] bettyShippingInf
                    , Order (Auto Nothing) localtime (pk james) (pk jamesAddress1) nothing_
                    ]
 
+insertLineItems :: Connection -> [Order] -> [Product] -> IO ()
+insertLineItems conn orders@[jamesOrder1, bettyOrder1, jamesOrder2] products@[redBall, mathTextbook, introToHaskell, suitcase] =
+  withDatabaseDebug putStrLn conn $
+  B.runInsert $ B.insert (shoppingCartDb ^. shoppingCartLineItems) $
+  insertValues [ LineItem (pk jamesOrder1) (pk redBall) 10
+               , LineItem (pk jamesOrder1) (pk mathTextbook) 1
+               , LineItem (pk jamesOrder1) (pk introToHaskell) 4
+               , LineItem (pk bettyOrder1) (pk mathTextbook) 3
+               , LineItem (pk bettyOrder1) (pk introToHaskell) 3
+               , LineItem (pk jamesOrder2) (pk mathTextbook) 1 ]
+
 selectAllUsers :: Connection -> IO ()
 selectAllUsers conn =
   withDatabaseDebug putStrLn conn $ do
@@ -376,4 +387,4 @@ main = do
   products@[redBall, mathTextbook, introToHaskell, suitcase] <- insertProducts conn
   [bettyShippingInfo] <- insertShippingInfos conn
   orders@[jamesOrder1, bettyOrder1, jamesOrder2] <- insertOrders conn addresses bettyShippingInfo
-  return ()
+  insertLineItems conn orders products
