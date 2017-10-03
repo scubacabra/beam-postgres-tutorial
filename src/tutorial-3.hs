@@ -354,6 +354,14 @@ allUsersAndTotals conn =
                               (\product -> maybe_ (val_ False) (\lineItem -> _lineItemForProduct lineItem `references_` product) lineItem)
          pure (user, lineItem, product)
 
+allUnshippedOrders :: Connection -> IO [Order]
+allUnshippedOrders conn =
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $
+    filter_ (isNothing_ . _orderShippingInfo) $
+    all_ (shoppingCartDb ^. shoppingCartOrders)
+
 bettyEmail :: Text
 bettyEmail = "betty@example.com"
 
