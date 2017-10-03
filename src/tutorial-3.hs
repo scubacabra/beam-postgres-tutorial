@@ -12,6 +12,7 @@ import           Control.Lens
 import           Data.Text                                (Text)
 import           Data.Time
 import           Database.Beam                            as B
+import           Database.Beam.Backend
 import           Database.Beam.Backend.SQL.BeamExtensions
 import           Database.Beam.Postgres
 import           Database.PostgreSQL.Simple
@@ -161,10 +162,10 @@ instance HasSqlValueSyntax be String => HasSqlValueSyntax be ShippingCarrier whe
   sqlValueSyntax = autoSqlValueSyntax
 
 instance FromField ShippingCarrier where
-  fromField f = do x <- readMaybe <$> fromField f
-                   case x of
-                     Nothing -> returnError ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
-                     Just x -> pure x
+  fromField f bs = do x <- readMaybe <$> fromField f bs
+                      case x of
+                        Nothing -> returnError ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
+                        Just x -> pure x
 
 instance FromBackendRow Postgres ShippingCarrier
 
