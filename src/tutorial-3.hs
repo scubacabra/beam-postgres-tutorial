@@ -307,6 +307,15 @@ selectAllUsersAndOrdersLeftJoin conn =
         order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
         pure (user, order)
 
+selectUsersWithNoOrdersLeftJoin :: Connection -> IO [User]
+selectUsersWithNoOrdersLeftJoin conn =
+   withDatabaseDebug putStrLn conn $
+    runSelectReturningList $ select $ do
+      user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+      order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
+      guard_ (isNothing_ order)
+      pure user
+
 bettyEmail :: Text
 bettyEmail = "betty@example.com"
 
