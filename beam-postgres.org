@@ -1281,3 +1281,20 @@ trying to follow [[https://tathougies.github.io/beam/tutorials/tutorial1/][ beam
                         FROM "orders" AS "t1"
                         WHERE ("t1"."for_user__email") = ("t0"."email")))
     #+END_SRC
+*** orders with cost ordered using inner join
+
+    #+BEGIN_SRC haskell
+      ordersWithCostOrdered :: Connection -> IO [(Order, Int)]
+      ordersWithCostOrdered conn =
+        withDatabaseDebug putStrLn conn $
+            runSelectReturningList $ select $
+            orderBy_ (\(order, total) -> desc_ total) $
+            aggregate_ (\(order, lineItem, product) ->
+                          (group_ order, sum_ (lineItem ^. lineItemQuantity * product ^. productPrice))) $
+            do
+              lineItem <- all_ (shoppingCartDb ^. shoppingCartLineItems)
+              order    <- related_ (shoppingCartDb ^. shoppingCartOrders) (_lineItemInOrder lineItem)
+              product  <- related_ (shoppingCartDb ^. shoppingCartProducts) (_lineItemForProduct lineItem)
+              pure (order, lineItem, product)
+    #+END_SRC
+

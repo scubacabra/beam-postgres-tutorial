@@ -324,6 +324,19 @@ selectUsersWithNoOrdersExistsCombinator conn =
       guard_ (not_ (exists_ (filter_ (\order -> _orderForUser order `references_` user) (all_ (shoppingCartDb ^. shoppingCartOrders)))))
       pure user
 
+ordersWithCostOrdered :: Connection -> IO [(Order, Int)]
+ordersWithCostOrdered conn =
+  withDatabaseDebug putStrLn conn $
+      runSelectReturningList $ select $
+      orderBy_ (\(order, total) -> desc_ total) $
+      aggregate_ (\(order, lineItem, product) ->
+                    (group_ order, sum_ (lineItem ^. lineItemQuantity * product ^. productPrice))) $
+      do
+        lineItem <- all_ (shoppingCartDb ^. shoppingCartLineItems)
+        order    <- related_ (shoppingCartDb ^. shoppingCartOrders) (_lineItemInOrder lineItem)
+        product  <- related_ (shoppingCartDb ^. shoppingCartProducts) (_lineItemForProduct lineItem)
+        pure (order, lineItem, product)
+
 bettyEmail :: Text
 bettyEmail = "betty@example.com"
 
